@@ -10,7 +10,7 @@ static thread_local std::mt19937 rng(std::random_device{}());
 constexpr int NUM_ITERATIONS = 100;
 constexpr int NUM_MATCHES = 10000;
 constexpr int RANDOM_HALF_MOVES = 10;
-constexpr int NODE_BUDGET = 5000;
+constexpr int NODE_BUDGET = 10000;
 
 static const char* START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 

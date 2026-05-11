@@ -39,7 +39,7 @@ model = torch.compile(model)
 model = model.to(device)
 #model.load_state_dict(torch.load("new.pt"))
 
-num_epochs = 60
+num_epochs = 30
 
 optimizer = torch.optim.AdamW(model.parameters(), lr=4e-3)
 

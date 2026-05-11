@@ -14,7 +14,7 @@
 
 #define USE_NNUE
 
-constexpr size_t _ACCUMULATOR_PERSP_SIZE = 64;
+constexpr size_t _ACCUMULATOR_PERSP_SIZE = 128;
 
 float nnue_infer(std::span<uint64_t> bbs);
 
