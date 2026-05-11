@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Blunderfish</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: system-ui, sans-serif;
+    background: #1a1a2e;
+    color: #e0e0e0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px;
+  }
+  h1 { font-size: 1.6rem; margin-bottom: 4px; letter-spacing: .05em; }
+  .subtitle { font-size: .85rem; color: #888; margin-bottom: 24px; }
+
+  .layout {
+    display: flex;
+    gap: 24px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  /* Board */
+  #board-wrap { position: relative; }
+  #board {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    grid-template-rows: repeat(8, 1fr);
+    width: min(480px, 90vw);
+    height: min(480px, 90vw);
+    border: 2px solid #444;
+    user-select: none;
+  }
+  .sq {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    position: relative;
+  }
+  .sq img.piece {
+    width: 85%;
+    height: 85%;
+    object-fit: contain;
+    pointer-events: none;
+  }
+  .sq.light { background: #f0d9b5; }
+  .sq.dark  { background: #b58863; }
+  .sq.selected { outline: 3px solid #f6f669; outline-offset: -3px; }
+  .sq.legal-target::after {
+    content: '';
+    position: absolute;
+    border-radius: 50%;
+    width: 30%;
+    height: 30%;
+    background: rgba(0,0,0,.25);
+    pointer-events: none;
+  }
+  .sq.last-move { background: rgba(246,246,105,.5) !important; }
+  .coord-file {
+    position: absolute; bottom: 2px; right: 3px;
+    font-size: 10px; font-weight: 600; color: rgba(0,0,0,.4);
+  }
+  .coord-rank {
+    position: absolute; top: 2px; left: 3px;
+    font-size: 10px; font-weight: 600; color: rgba(0,0,0,.4);
+  }
+  .sq.dark .coord-file, .sq.dark .coord-rank { color: rgba(255,255,255,.4); }
+
+  /* Side panel */
+  .panel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: min(280px, 90vw);
+  }
+
+  .status-box {
+    background: #16213e;
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 12px;
+    font-size: .9rem;
+  }
+  .status-box strong { display: block; margin-bottom: 4px; color: #aaa; font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; }
+
+  #status-text { color: #f0d9b5; font-weight: 600; }
+  #engine-info { color: #7ec8e3; font-size: .82rem; min-height: 3em; white-space: pre-line; word-break: break-all; }
+
+  .controls { display: flex; gap: 8px; flex-wrap: wrap; }
+  button {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: .85rem;
+    font-weight: 600;
+    transition: opacity .15s;
+  }
+  button:disabled { opacity: .4; cursor: default; }
+  .btn-new   { background: #4caf50; color: #fff; }
+  .btn-stop  { background: #e53935; color: #fff; }
+  .btn-flip  { background: #555; color: #fff; }
+  .btn-pgn   { background: #1565c0; color: #fff; }
+
+  .time-row { display: flex; align-items: center; gap: 8px; font-size: .85rem; }
+  .time-row label { color: #aaa; }
+  .time-row select {
+    background: #16213e;
+    color: #e0e0e0;
+    border: 1px solid #444;
+    border-radius: 4px;
+    padding: 4px 8px;
+  }
+
+  .log-box {
+    background: #0d0d1a;
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 10px;
+    height: 180px;
+    overflow-y: auto;
+    font-family: monospace;
+    font-size: .75rem;
+    color: #999;
+  }
+  .log-box .out { color: #7ec8e3; }
+  .log-box .in  { color: #c8e37e; }
+
+  #loading-overlay {
+    position: fixed; inset: 0;
+    background: rgba(10,10,20,.92);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 16px; z-index: 100;
+  }
+  #loading-overlay p { font-size: 1.1rem; color: #aaa; }
+  .spinner {
+    width: 48px; height: 48px;
+    border: 5px solid #333;
+    border-top-color: #7ec8e3;
+    border-radius: 50%;
+    animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div id="loading-overlay">
+  <div class="spinner"></div>
+  <p>Loading engine…</p>
+</div>
+
+<h1>Blunderfish</h1>
+<p class="subtitle">You play White · Engine plays Black</p>
+
+<div class="layout">
+  <div id="board-wrap">
+    <div id="board"></div>
+  </div>
+
+  <div class="panel">
+    <div class="status-box">
+      <strong>Status</strong>
+      <span id="status-text">Connecting…</span>
+    </div>
+
+    <div class="status-box">
+      <strong>Engine</strong>
+      <span id="engine-info">–</span>
+    </div>
+
+    <div class="controls">
+      <button class="btn-new"  id="btn-new"  disabled>New Game</button>
+      <button class="btn-stop" id="btn-stop" disabled>Stop</button>
+      <button class="btn-flip" id="btn-flip">Flip Board</button>
+      <button class="btn-pgn"  id="btn-pgn">Download PGN</button>
+    </div>
+
+    <div class="time-row">
+      <label>Think time</label>
+      <select id="movetime">
+        <option value="500">0.5 s</option>
+        <option value="1000" selected>1 s</option>
+        <option value="3000">3 s</option>
+        <option value="10000">10 s</option>
+        <option value="0">Unlimited</option>
+      </select>
+    </div>
+
+    <div class="log-box" id="log"></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+<script>
+// Wikipedia chess piece SVGs — stable redirect URLs, no CORS issues for img src
+const PIECE_URLS = {
+  wk: 'https://upload.wikimedia.org/wikipedia/commons/4/42/Chess_klt45.svg',
+  wq: 'https://upload.wikimedia.org/wikipedia/commons/1/15/Chess_qlt45.svg',
+  wr: 'https://upload.wikimedia.org/wikipedia/commons/7/72/Chess_rlt45.svg',
+  wb: 'https://upload.wikimedia.org/wikipedia/commons/b/b1/Chess_blt45.svg',
+  wn: 'https://upload.wikimedia.org/wikipedia/commons/7/70/Chess_nlt45.svg',
+  wp: 'https://upload.wikimedia.org/wikipedia/commons/4/45/Chess_plt45.svg',
+  bk: 'https://upload.wikimedia.org/wikipedia/commons/f/f0/Chess_kdt45.svg',
+  bq: 'https://upload.wikimedia.org/wikipedia/commons/4/47/Chess_qdt45.svg',
+  br: 'https://upload.wikimedia.org/wikipedia/commons/f/ff/Chess_rdt45.svg',
+  bb: 'https://upload.wikimedia.org/wikipedia/commons/9/98/Chess_bdt45.svg',
+  bn: 'https://upload.wikimedia.org/wikipedia/commons/e/ef/Chess_ndt45.svg',
+  bp: 'https://upload.wikimedia.org/wikipedia/commons/c/c7/Chess_pdt45.svg',
+};
+
+function pieceImg(color, type) {
+  const img = document.createElement('img');
+  img.src = PIECE_URLS[color + type] || '';
+  img.className = 'piece';
+  img.draggable = false;
+  return img;
+}
+
+// ── Board state (chess.js is source of truth) ───────────────────────────────
+
+let game = new Chess();
+let boardFlipped = false;
+let selectedAlg = null;   // algebraic square e.g. "e2"
+let legalTargets = new Set(); // algebraic squares
+let lastMove = null;          // {from, to} algebraic
+
+// Convert algebraic to our render index (0=a1)
+function algToIdx(alg) {
+  return ('abcdefgh'.indexOf(alg[0])) + (parseInt(alg[1]) - 1) * 8;
+}
+
+function renderBoard() {
+  const board = document.getElementById('board');
+  board.innerHTML = '';
+  const b = game.board(); // 8x8 array, b[0] = rank 8
+
+  for (let vis = 0; vis < 64; vis++) {
+    const col = vis % 8;
+    const row = Math.floor(vis / 8);
+    const file = boardFlipped ? 7 - col : col;
+    const rank = boardFlipped ? row : 7 - row;
+    const alg = 'abcdefgh'[file] + (rank + 1);
+    const piece = b[7 - rank][file]; // chess.js board[0]=rank8
+
+    const div = document.createElement('div');
+    div.className = 'sq ' + ((file + rank) % 2 === 0 ? 'dark' : 'light');
+    div.dataset.sq = alg;
+
+    if (selectedAlg === alg) div.classList.add('selected');
+    if (legalTargets.has(alg)) div.classList.add('legal-target');
+    if (lastMove && (lastMove.from === alg || lastMove.to === alg)) div.classList.add('last-move');
+
+    if (rank === 0) {
+      const cf = document.createElement('span');
+      cf.className = 'coord-file';
+      cf.textContent = 'abcdefgh'[file];
+      div.appendChild(cf);
+    }
+    if (file === 0) {
+      const cr = document.createElement('span');
+      cr.className = 'coord-rank';
+      cr.textContent = rank + 1;
+      div.appendChild(cr);
+    }
+
+    if (piece) {
+      div.appendChild(pieceImg(piece.color, piece.type));
+    }
+
+    div.addEventListener('click', () => onSquareClick(alg));
+    board.appendChild(div);
+  }
+}
+
+// ── Game state ───────────────────────────────────────────────────────────────
+
+let engineThinking = false;
+let engineReady = false;
+let gameOver = false;
+
+function onSquareClick(alg) {
+  if (!engineReady || engineThinking || game.turn() !== 'w' || gameOver) return;
+
+  const piece = game.get(alg);
+
+  // Nothing selected yet
+  if (!selectedAlg) {
+    if (piece && piece.color === 'w') {
+      selectedAlg = alg;
+      legalTargets = new Set(
+        game.moves({ square: alg, verbose: true }).map(m => m.to)
+      );
+      renderBoard();
+    }
+    return;
+  }
+
+  // Deselect
+  if (alg === selectedAlg) {
+    selectedAlg = null; legalTargets = new Set(); renderBoard(); return;
+  }
+
+  // Reselect another white piece
+  if (piece && piece.color === 'w') {
+    selectedAlg = alg;
+    legalTargets = new Set(
+      game.moves({ square: alg, verbose: true }).map(m => m.to)
+    );
+    renderBoard();
+    return;
+  }
+
+  // Only allow moves to highlighted squares
+  if (!legalTargets.has(alg)) {
+    selectedAlg = null; legalTargets = new Set(); renderBoard(); return;
+  }
+
+  // Determine promotion (auto-queen)
+  const movingPiece = game.get(selectedAlg);
+  const promotion = (movingPiece.type === 'p' && alg[1] === '8') ? 'q' : undefined;
+
+  const result = game.move({ from: selectedAlg, to: alg, promotion });
+  if (!result) { selectedAlg = null; legalTargets = new Set(); renderBoard(); return; }
+
+  lastMove = { from: selectedAlg, to: alg };
+  selectedAlg = null; legalTargets = new Set();
+  renderBoard();
+  sendPositionToEngine();
+  checkGameOver() || triggerEngineMove();
+}
+
+function sendPositionToEngine() {
+  engineSend(`position fen ${game.fen()}`);
+}
+
+function triggerEngineMove() {
+  engineThinking = true;
+  setStatus('Engine thinking…');
+  document.getElementById('btn-stop').disabled = false;
+  const mt = parseInt(document.getElementById('movetime').value);
+  engineSend(mt > 0 ? `go movetime ${mt}` : 'go infinite');
+}
+
+function onEngineOutput(line) {
+  logLine(line, 'out');
+
+  if (line.startsWith('info depth')) {
+    const match = line.match(/depth (\d+).*score (cp|mate) (-?\d+).*pv (.+)/);
+    if (match) {
+      const score = match[2] === 'mate'
+        ? `Mate in ${Math.abs(parseInt(match[3]))}`
+        : `${(parseInt(match[3]) / 100).toFixed(2)}`;
+      document.getElementById('engine-info').textContent =
+        `Depth ${match[1]}  Score ${score}\nPV: ${match[4].split(' ').slice(0, 5).join(' ')}`;
+    }
+  }
+
+  if (line.startsWith('bestmove')) {
+    engineThinking = false;
+    document.getElementById('btn-stop').disabled = true;
+    const mv = line.split(' ')[1];
+    if (!mv || mv === '(none)' || mv === 'null') {
+      setStatus('Engine has no legal moves.');
+      gameOver = true;
+      return;
+    }
+    const from = mv.slice(0, 2), to = mv.slice(2, 4), promo = mv[4];
+    const result = game.move({ from, to, promotion: promo || undefined });
+    if (result) {
+      lastMove = { from, to };
+      renderBoard();
+      sendPositionToEngine();
+      checkGameOver() || setStatus('Your turn (White)');
+    }
+  }
+}
+
+function checkGameOver() {
+  if (game.in_checkmate()) {
+    setStatus(game.turn() === 'w' ? 'Checkmate — Black wins!' : 'Checkmate — White wins!');
+    gameOver = true; return true;
+  }
+  if (game.in_draw()) {
+    setStatus('Draw!'); gameOver = true; return true;
+  }
+  if (game.in_check()) setStatus(game.turn() === 'w' ? 'White is in check!' : 'Engine is in check…');
+  return false;
+}
+
+// ── Controls ─────────────────────────────────────────────────────────────────
+
+document.getElementById('btn-new').addEventListener('click', () => {
+  game = new Chess();
+  lastMove = null; selectedAlg = null; legalTargets = new Set();
+  engineThinking = false; gameOver = false;
+  document.getElementById('engine-info').textContent = '–';
+  document.getElementById('btn-stop').disabled = true;
+  engineSend('ucinewgame');
+  setStatus('Your turn (White)');
+  renderBoard();
+});
+
+document.getElementById('btn-stop').addEventListener('click', () => {
+  engineSend('stop');
+  engineThinking = false;
+  document.getElementById('btn-stop').disabled = true;
+  setStatus('Your turn (White)');
+});
+
+document.getElementById('btn-flip').addEventListener('click', () => {
+  boardFlipped = !boardFlipped; renderBoard();
+});
+
+document.getElementById('btn-pgn').addEventListener('click', () => {
+  const pgn = game.pgn({ max_width: 80, newline_char: '\n' });
+  const blob = new Blob([pgn], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'blunderfish.pgn';
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+// ── Engine comms ─────────────────────────────────────────────────────────────
+
+let worker = null;
+
+function engineSend(cmd) {
+  logLine(cmd, 'in');
+  worker.postMessage({ type: 'send', cmd });
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function setStatus(msg) { document.getElementById('status-text').textContent = msg; }
+
+function logLine(text, dir) {
+  const box = document.getElementById('log');
+  const div = document.createElement('div');
+  div.className = dir;
+  div.textContent = (dir === 'in' ? '→ ' : '← ') + text;
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+
+renderBoard();
+worker = new Worker('worker.js');
+
+worker.onmessage = (e) => {
+  if (e.data.type === 'ready') {
+    document.getElementById('loading-overlay').style.display = 'none';
+    engineReady = true;
+    engineSend('uci');
+    setStatus('Your turn (White)');
+    document.getElementById('btn-new').disabled = false;
+  } else if (e.data.type === 'output') {
+    onEngineOutput(e.data.line);
+  } else if (e.data.type === 'error') {
+    document.querySelector('#loading-overlay p').textContent = 'Error: ' + e.data.message;
+  }
+};
+
+worker.onerror = (e) => { setStatus('Worker error: ' + e.message); console.error(e); };
+</script>
+</body>
+</html>
