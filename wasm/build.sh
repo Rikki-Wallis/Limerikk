@@ -20,8 +20,8 @@ emcmake cmake "$SCRIPT_DIR" \
 echo "==> Building..."
 emmake cmake --build "$BUILD_DIR" --parallel "$(nproc 2>/dev/null || sysctl -n hw.logicalcpu)"
 
-echo "==> Copying outputs to webui/..."
-WEBUI_DIR="$SCRIPT_DIR/../webui"
+echo "==> Copying outputs to repo root..."
+WEBUI_DIR="$SCRIPT_DIR/.."
 cp "$BUILD_DIR/limerikk_wasm.js"   "$WEBUI_DIR/limerikk_wasm.js"
 cp "$BUILD_DIR/limerikk_wasm.wasm" "$WEBUI_DIR/limerikk_wasm.wasm"
 cp "$BUILD_DIR/limerikk_wasm.worker.js" "$WEBUI_DIR/limerikk_wasm.worker.js" 2>/dev/null || true

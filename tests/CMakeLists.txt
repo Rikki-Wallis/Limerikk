@@ -19,7 +19,7 @@ target_link_libraries(test_zobrist PRIVATE limerikk Catch2::Catch2WithMain)
 add_executable(test_eval test_eval.cpp)
 target_link_libraries(test_eval PRIVATE limerikk Catch2::Catch2WithMain)
 add_executable(test_polyglot test_polyglot.cpp)
-target_link_libraries(test_polyglot PRIVATE limkerikk Catch2::Catch2WithMain)
+target_link_libraries(test_polyglot PRIVATE limerikk Catch2::Catch2WithMain)
 add_executable(test_fen test_fen.cpp)
 target_link_libraries(test_fen PRIVATE limerikk Catch2::Catch2WithMain)
 
