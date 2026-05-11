@@ -49,12 +49,18 @@
     position: relative;
     box-shadow: 0 0 0 1px #222, 0 8px 48px rgba(0,0,0,.8);
   }
+  :root {
+    --board-size: min(calc(100vh - 164px), calc(100vw - 352px));
+  }
+  @media (max-width: 650px) {
+    :root { --board-size: 90vw; }
+  }
   #board {
     display: grid;
     grid-template-columns: repeat(8, 1fr);
     grid-template-rows: repeat(8, 1fr);
-    width: min(520px, 90vw);
-    height: min(520px, 90vw);
+    width: var(--board-size);
+    height: var(--board-size);
     user-select: none;
   }
   .sq {
@@ -63,6 +69,7 @@
     justify-content: center;
     cursor: pointer;
     position: relative;
+    z-index: 0;
     transition: filter .1s;
   }
   .sq:hover { filter: brightness(1.1); }
@@ -82,6 +89,17 @@
     width: 32%;
     height: 32%;
     background: rgba(0,0,0,.22);
+    pointer-events: none;
+    z-index: 1;
+  }
+  .sq.legal-capture::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    box-sizing: border-box;
+    border-radius: 50%;
+    border: calc(var(--board-size) / 80) solid rgba(0,0,0,.28);
+    background: transparent;
     pointer-events: none;
     z-index: 1;
   }
@@ -281,19 +299,20 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 <script>
 // Wikipedia chess piece SVGs — stable redirect URLs, no CORS issues for img src
+const PIECE_BASE = 'https://cdn.jsdelivr.net/gh/lichess-org/lila@master/public/piece/staunty/';
 const PIECE_URLS = {
-  wk: 'https://upload.wikimedia.org/wikipedia/commons/4/42/Chess_klt45.svg',
-  wq: 'https://upload.wikimedia.org/wikipedia/commons/1/15/Chess_qlt45.svg',
-  wr: 'https://upload.wikimedia.org/wikipedia/commons/7/72/Chess_rlt45.svg',
-  wb: 'https://upload.wikimedia.org/wikipedia/commons/b/b1/Chess_blt45.svg',
-  wn: 'https://upload.wikimedia.org/wikipedia/commons/7/70/Chess_nlt45.svg',
-  wp: 'https://upload.wikimedia.org/wikipedia/commons/4/45/Chess_plt45.svg',
-  bk: 'https://upload.wikimedia.org/wikipedia/commons/f/f0/Chess_kdt45.svg',
-  bq: 'https://upload.wikimedia.org/wikipedia/commons/4/47/Chess_qdt45.svg',
-  br: 'https://upload.wikimedia.org/wikipedia/commons/f/ff/Chess_rdt45.svg',
-  bb: 'https://upload.wikimedia.org/wikipedia/commons/9/98/Chess_bdt45.svg',
-  bn: 'https://upload.wikimedia.org/wikipedia/commons/e/ef/Chess_ndt45.svg',
-  bp: 'https://upload.wikimedia.org/wikipedia/commons/c/c7/Chess_pdt45.svg',
+  wk: PIECE_BASE + 'wK.svg',
+  wq: PIECE_BASE + 'wQ.svg',
+  wr: PIECE_BASE + 'wR.svg',
+  wb: PIECE_BASE + 'wB.svg',
+  wn: PIECE_BASE + 'wN.svg',
+  wp: PIECE_BASE + 'wP.svg',
+  bk: PIECE_BASE + 'bK.svg',
+  bq: PIECE_BASE + 'bQ.svg',
+  br: PIECE_BASE + 'bR.svg',
+  bb: PIECE_BASE + 'bB.svg',
+  bn: PIECE_BASE + 'bN.svg',
+  bp: PIECE_BASE + 'bP.svg',
 };
 
 function pieceImg(color, type) {
@@ -335,7 +354,7 @@ function renderBoard() {
     div.dataset.sq = alg;
 
     if (selectedAlg === alg) div.classList.add('selected');
-    if (legalTargets.has(alg)) div.classList.add('legal-target');
+    if (legalTargets.has(alg)) div.classList.add(piece ? 'legal-capture' : 'legal-target');
     if (lastMove && (lastMove.from === alg || lastMove.to === alg)) div.classList.add('last-move');
 
     if (rank === 0) {
@@ -528,6 +547,29 @@ document.getElementById('btn-flip').addEventListener('click', () => {
 });
 
 document.getElementById('btn-pgn').addEventListener('click', () => {
+  const now = new Date();
+  const dateStr = `${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')}`;
+  const mt = parseInt(document.getElementById('movetime').value);
+  const depth = parseInt(document.getElementById('maxdepth').value);
+  const depthStr = depth >= 40 ? 'unlimited' : String(depth);
+
+  let result = '*';
+  if (game.in_checkmate()) result = game.turn() === 'w' ? '0-1' : '1-0';
+  else if (game.in_draw())  result = '1/2-1/2';
+
+  game.header(
+    'Event',     'Casual Game',
+    'Site',      'Limerikk',
+    'Date',      dateStr,
+    'Round',     '?',
+    'White',     playerColor === 'w' ? 'Human' : 'Limerikk',
+    'Black',     playerColor === 'b' ? 'Human' : 'Limerikk',
+    'Result',    result,
+    'WhiteType', playerColor === 'w' ? 'human' : 'program',
+    'BlackType', playerColor === 'b' ? 'human' : 'program',
+    'TimeControl', `${mt / 1000}s/move depth ${depthStr}`
+  );
+
   const pgn = game.pgn({ max_width: 80, newline_char: '\n' });
   const blob = new Blob([pgn], { type: 'text/plain' });
   const a = document.createElement('a');
