@@ -5,37 +5,56 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Limerikk</title>
 <style>
+  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;600&display=swap');
+
   * { box-sizing: border-box; margin: 0; padding: 0; }
+
   body {
-    font-family: system-ui, sans-serif;
-    background: #1a1a2e;
-    color: #e0e0e0;
+    font-family: 'Inter', system-ui, sans-serif;
+    background: #0a0a0a;
+    color: #e8e8e8;
     min-height: 100vh;
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 24px 16px;
+    padding: 32px 16px;
   }
-  h1 { font-size: 1.6rem; margin-bottom: 4px; letter-spacing: .05em; }
-  .subtitle { font-size: .85rem; color: #888; margin-bottom: 24px; }
+
+  h1 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 3rem;
+    letter-spacing: .12em;
+    color: #fff;
+    margin-bottom: 2px;
+    text-shadow: 0 0 40px rgba(220,50,50,.4);
+  }
+  .subtitle {
+    font-size: .8rem;
+    color: #555;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    margin-bottom: 32px;
+  }
 
   .layout {
     display: flex;
-    gap: 24px;
+    gap: 28px;
     align-items: flex-start;
     flex-wrap: wrap;
     justify-content: center;
   }
 
   /* Board */
-  #board-wrap { position: relative; }
+  #board-wrap {
+    position: relative;
+    box-shadow: 0 0 0 1px #222, 0 8px 48px rgba(0,0,0,.8);
+  }
   #board {
     display: grid;
     grid-template-columns: repeat(8, 1fr);
     grid-template-rows: repeat(8, 1fr);
-    width: min(480px, 90vw);
-    height: min(480px, 90vw);
-    border: 2px solid #444;
+    width: min(520px, 90vw);
+    height: min(520px, 90vw);
     user-select: none;
   }
   .sq {
@@ -44,110 +63,148 @@
     justify-content: center;
     cursor: pointer;
     position: relative;
+    transition: filter .1s;
   }
+  .sq:hover { filter: brightness(1.1); }
   .sq img.piece {
     width: 85%;
     height: 85%;
     object-fit: contain;
     pointer-events: none;
   }
-  .sq.light { background: #f0d9b5; }
-  .sq.dark  { background: #b58863; }
+  .sq.light { background: #769656; }
+  .sq.dark  { background: #eeeed2; }
   .sq.selected { outline: 3px solid #f6f669; outline-offset: -3px; }
   .sq.legal-target::after {
     content: '';
     position: absolute;
     border-radius: 50%;
-    width: 30%;
-    height: 30%;
-    background: rgba(0,0,0,.25);
+    width: 32%;
+    height: 32%;
+    background: rgba(0,0,0,.22);
     pointer-events: none;
+    z-index: 1;
   }
-  .sq.last-move { background: rgba(246,246,105,.5) !important; }
+  .sq.last-move.light { background: #cdd16f; }
+  .sq.last-move.dark  { background: #aaa23a; }
   .coord-file {
     position: absolute; bottom: 2px; right: 3px;
-    font-size: 10px; font-weight: 600; color: rgba(0,0,0,.4);
+    font-size: 10px; font-weight: 700;
+    color: rgba(255,255,255,.5);
+    z-index: 1;
   }
   .coord-rank {
     position: absolute; top: 2px; left: 3px;
-    font-size: 10px; font-weight: 600; color: rgba(0,0,0,.4);
+    font-size: 10px; font-weight: 700;
+    color: rgba(255,255,255,.5);
+    z-index: 1;
   }
-  .sq.dark .coord-file, .sq.dark .coord-rank { color: rgba(255,255,255,.4); }
+  .sq.dark .coord-file, .sq.dark .coord-rank { color: rgba(0,0,0,.35); }
 
-  /* Side panel */
+  /* Panel */
   .panel {
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    width: min(280px, 90vw);
+    gap: 14px;
+    width: min(260px, 90vw);
   }
 
-  .status-box {
-    background: #16213e;
-    border: 1px solid #333;
-    border-radius: 8px;
-    padding: 12px;
-    font-size: .9rem;
+  .card {
+    background: #111;
+    border: 1px solid #1e1e1e;
+    border-radius: 4px;
+    padding: 14px;
   }
-  .status-box strong { display: block; margin-bottom: 4px; color: #aaa; font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; }
+  .card-label {
+    font-size: .68rem;
+    font-weight: 600;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: #444;
+    margin-bottom: 6px;
+  }
 
-  #status-text { color: #f0d9b5; font-weight: 600; }
-  #engine-info { color: #7ec8e3; font-size: .82rem; min-height: 3em; white-space: pre-line; word-break: break-all; }
+  #status-text {
+    font-size: .95rem;
+    font-weight: 600;
+    color: #fff;
+  }
+  #engine-info {
+    font-size: .82rem;
+    color: #888;
+    white-space: pre-line;
+    min-height: 2.4em;
+  }
 
   .controls { display: flex; gap: 8px; flex-wrap: wrap; }
   button {
-    padding: 8px 16px;
-    border: none;
-    border-radius: 6px;
+    padding: 8px 14px;
+    border: 1px solid transparent;
+    border-radius: 3px;
     cursor: pointer;
-    font-size: .85rem;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: .8rem;
     font-weight: 600;
-    transition: opacity .15s;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    transition: opacity .15s, background .15s;
   }
-  button:disabled { opacity: .4; cursor: default; }
-  .btn-new   { background: #4caf50; color: #fff; }
-  .btn-stop  { background: #e53935; color: #fff; }
-  .btn-flip  { background: #555; color: #fff; }
-  .btn-pgn   { background: #1565c0; color: #fff; }
+  button:disabled { opacity: .3; cursor: default; }
 
-  .time-row { display: flex; align-items: center; gap: 8px; font-size: .85rem; }
-  .time-row label { color: #aaa; }
+  .btn-new   { background: #dc3232; color: #fff; border-color: #dc3232; }
+  .btn-new:hover:not(:disabled)   { background: #ff4444; }
+  .btn-flip  { background: transparent; color: #666; border-color: #333; }
+  .btn-flip:hover:not(:disabled)  { border-color: #666; color: #999; }
+  .btn-sides { background: transparent; color: #aaa; border-color: #333; }
+  .btn-sides:hover:not(:disabled) { border-color: #666; color: #fff; }
+  .btn-pgn   { background: transparent; color: #555; border-color: #222; }
+  .btn-pgn:hover:not(:disabled)   { color: #aaa; border-color: #555; }
+
+  .time-row { display: flex; align-items: center; gap: 10px; font-size: .8rem; }
+  .time-row label { color: #444; text-transform: uppercase; letter-spacing: .08em; font-size: .72rem; font-weight: 600; }
   .time-row select {
-    background: #16213e;
-    color: #e0e0e0;
-    border: 1px solid #444;
-    border-radius: 4px;
-    padding: 4px 8px;
+    background: #0a0a0a;
+    color: #ccc;
+    border: 1px solid #2a2a2a;
+    border-radius: 3px;
+    padding: 5px 8px;
+    font-size: .8rem;
   }
 
   .log-box {
-    background: #0d0d1a;
-    border: 1px solid #333;
-    border-radius: 8px;
+    background: #050505;
+    border: 1px solid #1a1a1a;
+    border-radius: 4px;
     padding: 10px;
-    height: 180px;
+    height: 160px;
     overflow-y: auto;
-    font-family: monospace;
-    font-size: .75rem;
-    color: #999;
+    font-family: 'Courier New', monospace;
+    font-size: .7rem;
+    color: #333;
   }
-  .log-box .out { color: #7ec8e3; }
-  .log-box .in  { color: #c8e37e; }
+  .log-box .out { color: #555; }
+  .log-box .in  { color: #3a3a3a; }
 
+  /* Loading */
   #loading-overlay {
     position: fixed; inset: 0;
-    background: rgba(10,10,20,.92);
+    background: #0a0a0a;
     display: flex; flex-direction: column;
     align-items: center; justify-content: center;
-    gap: 16px; z-index: 100;
+    gap: 20px; z-index: 100;
   }
-  #loading-overlay p { font-size: 1.1rem; color: #aaa; }
+  #loading-overlay p {
+    font-size: .85rem;
+    color: #444;
+    text-transform: uppercase;
+    letter-spacing: .15em;
+  }
   .spinner {
-    width: 48px; height: 48px;
-    border: 5px solid #333;
-    border-top-color: #7ec8e3;
+    width: 40px; height: 40px;
+    border: 2px solid #1a1a1a;
+    border-top-color: #dc3232;
     border-radius: 50%;
-    animation: spin .8s linear infinite;
+    animation: spin .7s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 </style>
@@ -160,7 +217,7 @@
 </div>
 
 <h1>Limerikk</h1>
-<p class="subtitle">You play White · Engine plays Black</p>
+<p class="subtitle" id="subtitle">You play White · Engine plays Black</p>
 
 <div class="layout">
   <div id="board-wrap">
@@ -168,21 +225,23 @@
   </div>
 
   <div class="panel">
-    <div class="status-box">
-      <strong>Status</strong>
+    <div class="card">
+      <div class="card-label">Status</div>
       <span id="status-text">Connecting…</span>
     </div>
 
-    <div class="status-box">
-      <strong>Engine</strong>
+    <div class="card">
+      <div class="card-label">Engine</div>
+      <img id="monkey" src="https://preview.redd.it/the-original-image-of-the-monkey-thinking-meme-v0-ea1hkdjnx9af1.jpeg?auto=webp&s=becb6ced6bb0749959ddc0c27286cbf909699aa3"
+        style="display:none;width:100%;border-radius:3px;margin-bottom:8px;" alt="thinking">
       <span id="engine-info">–</span>
     </div>
 
     <div class="controls">
-      <button class="btn-new"  id="btn-new"  disabled>New Game</button>
-      <button class="btn-stop" id="btn-stop" disabled>Stop</button>
-      <button class="btn-flip" id="btn-flip">Flip Board</button>
-      <button class="btn-pgn"  id="btn-pgn">Download PGN</button>
+      <button class="btn-new"   id="btn-new"   disabled>New Game</button>
+      <button class="btn-flip"  id="btn-flip">Flip</button>
+      <button class="btn-sides" id="btn-sides" disabled>Play as Black</button>
+      <button class="btn-pgn"   id="btn-pgn">PGN</button>
     </div>
 
     <div class="time-row">
@@ -192,7 +251,6 @@
         <option value="1000" selected>1 s</option>
         <option value="3000">3 s</option>
         <option value="10000">10 s</option>
-        <option value="0">Unlimited</option>
       </select>
     </div>
 
@@ -287,15 +345,16 @@ function renderBoard() {
 let engineThinking = false;
 let engineReady = false;
 let gameOver = false;
+let playerColor = 'w';
 
 function onSquareClick(alg) {
-  if (!engineReady || engineThinking || game.turn() !== 'w' || gameOver) return;
+  if (!engineReady || engineThinking || game.turn() !== playerColor || gameOver) return;
 
   const piece = game.get(alg);
 
   // Nothing selected yet
   if (!selectedAlg) {
-    if (piece && piece.color === 'w') {
+    if (piece && piece.color === playerColor) {
       selectedAlg = alg;
       legalTargets = new Set(
         game.moves({ square: alg, verbose: true }).map(m => m.to)
@@ -311,7 +370,7 @@ function onSquareClick(alg) {
   }
 
   // Reselect another white piece
-  if (piece && piece.color === 'w') {
+  if (piece && piece.color === playerColor) {
     selectedAlg = alg;
     legalTargets = new Set(
       game.moves({ square: alg, verbose: true }).map(m => m.to)
@@ -336,7 +395,7 @@ function onSquareClick(alg) {
   selectedAlg = null; legalTargets = new Set();
   renderBoard();
   sendPositionToEngine();
-  checkGameOver() || triggerEngineMove();
+  checkGameOver() || (game.turn() !== playerColor && triggerEngineMove());
 }
 
 function sendPositionToEngine() {
@@ -346,28 +405,37 @@ function sendPositionToEngine() {
 function triggerEngineMove() {
   engineThinking = true;
   setStatus('Engine thinking…');
-  document.getElementById('btn-stop').disabled = false;
+  document.getElementById('monkey').style.display = 'block';
+  document.getElementById('btn-new').disabled = true;
+  document.getElementById('btn-sides').disabled = true;
   const mt = parseInt(document.getElementById('movetime').value);
-  engineSend(mt > 0 ? `go movetime ${mt}` : 'go infinite');
+  engineSend(`go movetime ${mt}`);
 }
 
 function onEngineOutput(line) {
   logLine(line, 'out');
 
   if (line.startsWith('info depth')) {
-    const match = line.match(/depth (\d+).*score (cp|mate) (-?\d+).*pv (.+)/);
-    if (match) {
-      const score = match[2] === 'mate'
-        ? `Mate in ${Math.abs(parseInt(match[3]))}`
-        : `${(parseInt(match[3]) / 100).toFixed(2)}`;
+    const depth    = line.match(/depth (\d+)/);
+    const seldepth = line.match(/seldepth (\d+)/);
+    const score    = line.match(/score (cp|mate) (-?\d+)/);
+    if (depth && score) {
+      const scoreStr = score[1] === 'mate'
+        ? `Mate in ${Math.abs(parseInt(score[2]))}`
+        : `${(parseInt(score[2]) / 100).toFixed(2)}`;
+      const depthStr = seldepth
+        ? `${depth[1]}/${seldepth[1]}`
+        : depth[1];
       document.getElementById('engine-info').textContent =
-        `Depth ${match[1]}  Score ${score}\nPV: ${match[4].split(' ').slice(0, 5).join(' ')}`;
+        `Depth ${depthStr}  Score ${scoreStr}`;
     }
   }
 
   if (line.startsWith('bestmove')) {
     engineThinking = false;
-    document.getElementById('btn-stop').disabled = true;
+    document.getElementById('monkey').style.display = 'none';
+    document.getElementById('btn-new').disabled = false;
+    document.getElementById('btn-sides').disabled = false;
     const mv = line.split(' ')[1];
     if (!mv || mv === '(none)' || mv === 'null') {
       setStatus('Engine has no legal moves.');
@@ -380,7 +448,7 @@ function onEngineOutput(line) {
       lastMove = { from, to };
       renderBoard();
       sendPositionToEngine();
-      checkGameOver() || setStatus('Your turn (White)');
+      checkGameOver() || setStatus(`Your turn (${playerColor === 'w' ? 'White' : 'Black'})`);
     }
   }
 }
@@ -404,17 +472,31 @@ document.getElementById('btn-new').addEventListener('click', () => {
   lastMove = null; selectedAlg = null; legalTargets = new Set();
   engineThinking = false; gameOver = false;
   document.getElementById('engine-info').textContent = '–';
-  document.getElementById('btn-stop').disabled = true;
   engineSend('ucinewgame');
-  setStatus('Your turn (White)');
   renderBoard();
+  if (playerColor === 'w') {
+    setStatus('Your turn (White)');
+  } else {
+    setStatus('Engine thinking…');
+    sendPositionToEngine();
+    triggerEngineMove();
+  }
 });
 
-document.getElementById('btn-stop').addEventListener('click', () => {
-  engineSend('stop');
-  engineThinking = false;
-  document.getElementById('btn-stop').disabled = true;
-  setStatus('Your turn (White)');
+document.getElementById('btn-sides').addEventListener('click', () => {
+  playerColor = playerColor === 'w' ? 'b' : 'w';
+  boardFlipped = playerColor === 'b';
+  document.getElementById('btn-sides').textContent =
+    playerColor === 'w' ? 'Play as Black' : 'Play as White';
+  document.getElementById('subtitle').textContent =
+    playerColor === 'w' ? 'You play White · Engine plays Black' : 'You play Black · Engine plays White';
+  selectedAlg = null; legalTargets = new Set();
+  renderBoard();
+  if (game.turn() !== playerColor) {
+    triggerEngineMove();
+  } else {
+    setStatus(`Your turn (${playerColor === 'w' ? 'White' : 'Black'})`);
+  }
 });
 
 document.getElementById('btn-flip').addEventListener('click', () => {
@@ -465,6 +547,7 @@ worker.onmessage = (e) => {
     engineSend('uci');
     setStatus('Your turn (White)');
     document.getElementById('btn-new').disabled = false;
+    document.getElementById('btn-sides').disabled = false;
   } else if (e.data.type === 'output') {
     onEngineOutput(e.data.line);
   } else if (e.data.type === 'error') {
