@@ -10,7 +10,6 @@ add_compile_options(
     -Wno-unused-const-variable
     -Wno-unused-function
     -Wno-unused-parameter
-    -O2
 )
 
 add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
@@ -36,5 +35,4 @@ target_link_options(limerikk_wasm PRIVATE
     -sEXPORTED_FUNCTIONS=_main,_uci_init,_uci_send,_uci_flush
     -sEXPORTED_RUNTIME_METHODS=ccall,cwrap
     -sEXIT_RUNTIME=0
-    -O2
 )
