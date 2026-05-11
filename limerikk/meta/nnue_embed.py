@@ -19,7 +19,7 @@ def read_float_matrix(rows, cols):
     return [read_floats(cols) for _ in range(rows)]
 
 num_inputs = 2*6*64
-l1_output = 128
+l1_output = 64
 l2_input = l1_output*2
 l3_input = 32
 
