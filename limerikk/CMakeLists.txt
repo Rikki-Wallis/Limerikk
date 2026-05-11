@@ -44,6 +44,6 @@ add_custom_command(
 
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_LIST_DIR}/src/*.cpp)
 
-add_library(blunderfish STATIC ${SOURCES} ${MOVE_TABLES_HPP} ${BOOK_HPP} ${NNUE_HPP})
-target_include_directories(blunderfish PUBLIC ${CMAKE_CURRENT_LIST_DIR}/src)
-target_include_directories(blunderfish PRIVATE ${GENERATED_DIR})
+add_library(limerikk STATIC ${SOURCES} ${MOVE_TABLES_HPP} ${BOOK_HPP} ${NNUE_HPP})
+target_include_directories(limerikk PUBLIC ${CMAKE_CURRENT_LIST_DIR}/src)
+target_include_directories(limerikk PRIVATE ${GENERATED_DIR})

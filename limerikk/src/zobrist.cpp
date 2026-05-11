@@ -1,7 +1,7 @@
 #include <cstdio>
 #include <vector>
 #include <cstdint>
-#include "blunderfish.h"
+#include "limerikk.h"
 
 constexpr ZobristTable initialize_zobrist_table();
 

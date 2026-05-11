@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Limerikk</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;600&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: #0a0a0a;
+    color: #e8e8e8;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 32px 16px;
+  }
+
+  h1 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 3rem;
+    letter-spacing: .12em;
+    color: #fff;
+    margin-bottom: 2px;
+    text-shadow: 0 0 40px rgba(220,50,50,.4);
+  }
+  .subtitle {
+    font-size: .8rem;
+    color: #555;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    margin-bottom: 32px;
+  }
+
+  .layout {
+    display: flex;
+    gap: 28px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  /* Board */
+  #board-wrap {
+    position: relative;
+    box-shadow: 0 0 0 1px #222, 0 8px 48px rgba(0,0,0,.8);
+  }
+  #board {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    grid-template-rows: repeat(8, 1fr);
+    width: min(520px, 90vw);
+    height: min(520px, 90vw);
+    user-select: none;
+  }
+  .sq {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    position: relative;
+    transition: filter .1s;
+  }
+  .sq:hover { filter: brightness(1.1); }
+  .sq img.piece {
+    width: 85%;
+    height: 85%;
+    object-fit: contain;
+    pointer-events: none;
+  }
+  .sq.light { background: #769656; }
+  .sq.dark  { background: #eeeed2; }
+  .sq.selected { outline: 3px solid #f6f669; outline-offset: -3px; }
+  .sq.legal-target::after {
+    content: '';
+    position: absolute;
+    border-radius: 50%;
+    width: 32%;
+    height: 32%;
+    background: rgba(0,0,0,.22);
+    pointer-events: none;
+    z-index: 1;
+  }
+  .sq.last-move.light { background: #cdd16f; }
+  .sq.last-move.dark  { background: #aaa23a; }
+  .coord-file {
+    position: absolute; bottom: 2px; right: 3px;
+    font-size: 10px; font-weight: 700;
+    color: rgba(255,255,255,.5);
+    z-index: 1;
+  }
+  .coord-rank {
+    position: absolute; top: 2px; left: 3px;
+    font-size: 10px; font-weight: 700;
+    color: rgba(255,255,255,.5);
+    z-index: 1;
+  }
+  .sq.dark .coord-file, .sq.dark .coord-rank { color: rgba(0,0,0,.35); }
+
+  /* Panel */
+  .panel {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    width: min(260px, 90vw);
+  }
+
+  .card {
+    background: #111;
+    border: 1px solid #1e1e1e;
+    border-radius: 4px;
+    padding: 14px;
+  }
+  .card-label {
+    font-size: .68rem;
+    font-weight: 600;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: #444;
+    margin-bottom: 6px;
+  }
+
+  #status-text {
+    font-size: .95rem;
+    font-weight: 600;
+    color: #fff;
+  }
+  #engine-info {
+    font-size: .82rem;
+    color: #888;
+    white-space: pre-line;
+    min-height: 2.4em;
+  }
+
+  .controls { display: flex; gap: 8px; flex-wrap: wrap; }
+  button {
+    padding: 8px 14px;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    cursor: pointer;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: .8rem;
+    font-weight: 600;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    transition: opacity .15s, background .15s;
+  }
+  button:disabled { opacity: .3; cursor: default; }
+
+  .btn-new   { background: #dc3232; color: #fff; border-color: #dc3232; }
+  .btn-new:hover:not(:disabled)   { background: #ff4444; }
+  .btn-flip  { background: transparent; color: #666; border-color: #333; }
+  .btn-flip:hover:not(:disabled)  { border-color: #666; color: #999; }
+  .btn-sides { background: transparent; color: #aaa; border-color: #333; }
+  .btn-sides:hover:not(:disabled) { border-color: #666; color: #fff; }
+  .btn-pgn   { background: transparent; color: #555; border-color: #222; }
+  .btn-pgn:hover:not(:disabled)   { color: #aaa; border-color: #555; }
+
+  .time-row { display: flex; align-items: center; gap: 10px; font-size: .8rem; }
+  .time-row label { color: #444; text-transform: uppercase; letter-spacing: .08em; font-size: .72rem; font-weight: 600; }
+  .time-row select {
+    background: #0a0a0a;
+    color: #ccc;
+    border: 1px solid #2a2a2a;
+    border-radius: 3px;
+    padding: 5px 8px;
+    font-size: .8rem;
+  }
+
+  .log-box {
+    background: #050505;
+    border: 1px solid #1a1a1a;
+    border-radius: 4px;
+    padding: 10px;
+    height: 160px;
+    overflow-y: auto;
+    font-family: 'Courier New', monospace;
+    font-size: .7rem;
+    color: #333;
+  }
+  .log-box .out { color: #555; }
+  .log-box .in  { color: #3a3a3a; }
+
+  /* Loading */
+  #loading-overlay {
+    position: fixed; inset: 0;
+    background: #0a0a0a;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 20px; z-index: 100;
+  }
+  #loading-overlay p {
+    font-size: .85rem;
+    color: #444;
+    text-transform: uppercase;
+    letter-spacing: .15em;
+  }
+  .spinner {
+    width: 40px; height: 40px;
+    border: 2px solid #1a1a1a;
+    border-top-color: #dc3232;
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div id="loading-overlay">
+  <div class="spinner"></div>
+  <p>Loading engine…</p>
+</div>
+
+<h1>Limerikk</h1>
+<p class="subtitle" id="subtitle">You play White · Engine plays Black</p>
+
+<div class="layout">
+  <div id="board-wrap">
+    <div id="board"></div>
+  </div>
+
+  <div class="panel">
+    <div class="card">
+      <div class="card-label">Status</div>
+      <span id="status-text">Connecting…</span>
+    </div>
+
+    <div class="card">
+      <div class="card-label">Engine</div>
+      <img id="monkey" src="https://preview.redd.it/the-original-image-of-the-monkey-thinking-meme-v0-ea1hkdjnx9af1.jpeg?auto=webp&s=becb6ced6bb0749959ddc0c27286cbf909699aa3"
+        style="display:none;width:100%;border-radius:3px;margin-bottom:8px;" alt="thinking">
+      <span id="engine-info">–</span>
+    </div>
+
+    <div class="controls">
+      <button class="btn-new"   id="btn-new"   disabled>New Game</button>
+      <button class="btn-flip"  id="btn-flip">Flip</button>
+      <button class="btn-sides" id="btn-sides" disabled>Play as Black</button>
+      <button class="btn-pgn"   id="btn-pgn">PGN</button>
+    </div>
+
+    <div class="time-row">
+      <label>Think time</label>
+      <select id="movetime">
+        <option value="500">0.5 s</option>
+        <option value="1000" selected>1 s</option>
+        <option value="3000">3 s</option>
+        <option value="10000">10 s</option>
+      </select>
+    </div>
+
+    <div class="time-row">
+      <label>Max depth</label>
+      <select id="maxdepth">
+        <option value="40" selected>Unlimited</option>
+        <option value="1">1</option>
+        <option value="2">2</option>
+        <option value="3">3</option>
+        <option value="4">4</option>
+        <option value="5">5</option>
+        <option value="6">6</option>
+        <option value="7">7</option>
+        <option value="8">8</option>
+        <option value="9">9</option>
+        <option value="10">10</option>
+        <option value="12">12</option>
+        <option value="15">15</option>
+        <option value="20">20</option>
+      </select>
+    </div>
+
+    <div class="log-box" id="log"></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+<script>
+// Wikipedia chess piece SVGs — stable redirect URLs, no CORS issues for img src
+const PIECE_URLS = {
+  wk: 'https://upload.wikimedia.org/wikipedia/commons/4/42/Chess_klt45.svg',
+  wq: 'https://upload.wikimedia.org/wikipedia/commons/1/15/Chess_qlt45.svg',
+  wr: 'https://upload.wikimedia.org/wikipedia/commons/7/72/Chess_rlt45.svg',
+  wb: 'https://upload.wikimedia.org/wikipedia/commons/b/b1/Chess_blt45.svg',
+  wn: 'https://upload.wikimedia.org/wikipedia/commons/7/70/Chess_nlt45.svg',
+  wp: 'https://upload.wikimedia.org/wikipedia/commons/4/45/Chess_plt45.svg',
+  bk: 'https://upload.wikimedia.org/wikipedia/commons/f/f0/Chess_kdt45.svg',
+  bq: 'https://upload.wikimedia.org/wikipedia/commons/4/47/Chess_qdt45.svg',
+  br: 'https://upload.wikimedia.org/wikipedia/commons/f/ff/Chess_rdt45.svg',
+  bb: 'https://upload.wikimedia.org/wikipedia/commons/9/98/Chess_bdt45.svg',
+  bn: 'https://upload.wikimedia.org/wikipedia/commons/e/ef/Chess_ndt45.svg',
+  bp: 'https://upload.wikimedia.org/wikipedia/commons/c/c7/Chess_pdt45.svg',
+};
+
+function pieceImg(color, type) {
+  const img = document.createElement('img');
+  img.src = PIECE_URLS[color + type] || '';
+  img.className = 'piece';
+  img.draggable = false;
+  return img;
+}
+
+// ── Board state (chess.js is source of truth) ───────────────────────────────
+
+let game = new Chess();
+let boardFlipped = false;
+let selectedAlg = null;   // algebraic square e.g. "e2"
+let legalTargets = new Set(); // algebraic squares
+let lastMove = null;          // {from, to} algebraic
+
+// Convert algebraic to our render index (0=a1)
+function algToIdx(alg) {
+  return ('abcdefgh'.indexOf(alg[0])) + (parseInt(alg[1]) - 1) * 8;
+}
+
+function renderBoard() {
+  const board = document.getElementById('board');
+  board.innerHTML = '';
+  const b = game.board(); // 8x8 array, b[0] = rank 8
+
+  for (let vis = 0; vis < 64; vis++) {
+    const col = vis % 8;
+    const row = Math.floor(vis / 8);
+    const file = boardFlipped ? 7 - col : col;
+    const rank = boardFlipped ? row : 7 - row;
+    const alg = 'abcdefgh'[file] + (rank + 1);
+    const piece = b[7 - rank][file]; // chess.js board[0]=rank8
+
+    const div = document.createElement('div');
+    div.className = 'sq ' + ((file + rank) % 2 === 0 ? 'dark' : 'light');
+    div.dataset.sq = alg;
+
+    if (selectedAlg === alg) div.classList.add('selected');
+    if (legalTargets.has(alg)) div.classList.add('legal-target');
+    if (lastMove && (lastMove.from === alg || lastMove.to === alg)) div.classList.add('last-move');
+
+    if (rank === 0) {
+      const cf = document.createElement('span');
+      cf.className = 'coord-file';
+      cf.textContent = 'abcdefgh'[file];
+      div.appendChild(cf);
+    }
+    if (file === 0) {
+      const cr = document.createElement('span');
+      cr.className = 'coord-rank';
+      cr.textContent = rank + 1;
+      div.appendChild(cr);
+    }
+
+    if (piece) {
+      div.appendChild(pieceImg(piece.color, piece.type));
+    }
+
+    div.addEventListener('click', () => onSquareClick(alg));
+    board.appendChild(div);
+  }
+}
+
+// ── Game state ───────────────────────────────────────────────────────────────
+
+let engineThinking = false;
+let engineReady = false;
+let gameOver = false;
+let playerColor = 'w';
+
+function onSquareClick(alg) {
+  if (!engineReady || engineThinking || game.turn() !== playerColor || gameOver) return;
+
+  const piece = game.get(alg);
+
+  // Nothing selected yet
+  if (!selectedAlg) {
+    if (piece && piece.color === playerColor) {
+      selectedAlg = alg;
+      legalTargets = new Set(
+        game.moves({ square: alg, verbose: true }).map(m => m.to)
+      );
+      renderBoard();
+    }
+    return;
+  }
+
+  // Deselect
+  if (alg === selectedAlg) {
+    selectedAlg = null; legalTargets = new Set(); renderBoard(); return;
+  }
+
+  // Reselect another white piece
+  if (piece && piece.color === playerColor) {
+    selectedAlg = alg;
+    legalTargets = new Set(
+      game.moves({ square: alg, verbose: true }).map(m => m.to)
+    );
+    renderBoard();
+    return;
+  }
+
+  // Only allow moves to highlighted squares
+  if (!legalTargets.has(alg)) {
+    selectedAlg = null; legalTargets = new Set(); renderBoard(); return;
+  }
+
+  // Determine promotion (auto-queen)
+  const movingPiece = game.get(selectedAlg);
+  const promotion = (movingPiece.type === 'p' && alg[1] === '8') ? 'q' : undefined;
+
+  const result = game.move({ from: selectedAlg, to: alg, promotion });
+  if (!result) { selectedAlg = null; legalTargets = new Set(); renderBoard(); return; }
+
+  lastMove = { from: selectedAlg, to: alg };
+  selectedAlg = null; legalTargets = new Set();
+  renderBoard();
+  sendPositionToEngine();
+  checkGameOver() || (game.turn() !== playerColor && triggerEngineMove());
+}
+
+function sendPositionToEngine() {
+  const moves = game.history({ verbose: true })
+    .map(m => m.from + m.to + (m.promotion || ''))
+    .join(' ');
+  engineSend(moves.length ? `position startpos moves ${moves}` : 'position startpos');
+}
+
+function triggerEngineMove() {
+  engineThinking = true;
+  setStatus('Engine thinking…');
+  document.getElementById('monkey').style.display = 'block';
+  document.getElementById('btn-new').disabled = true;
+  document.getElementById('btn-sides').disabled = true;
+  const mt = parseInt(document.getElementById('movetime').value);
+  const depth = parseInt(document.getElementById('maxdepth').value);
+  engineSend(`go movetime ${mt} depth ${depth}`);
+}
+
+function onEngineOutput(line) {
+  logLine(line, 'out');
+
+  if (line.startsWith('info depth')) {
+    const depth    = line.match(/depth (\d+)/);
+    const seldepth = line.match(/seldepth (\d+)/);
+    const score    = line.match(/score (cp|mate) (-?\d+)/);
+    if (depth && score) {
+      const scoreStr = score[1] === 'mate'
+        ? `Mate in ${Math.abs(parseInt(score[2]))}`
+        : `${(parseInt(score[2]) / 100).toFixed(2)}`;
+      const depthStr = seldepth
+        ? `${depth[1]}/${seldepth[1]}`
+        : depth[1];
+      document.getElementById('engine-info').textContent =
+        `Depth ${depthStr}  Score ${scoreStr}`;
+    }
+  }
+
+  if (line.startsWith('bestmove')) {
+    engineThinking = false;
+    document.getElementById('monkey').style.display = 'none';
+    document.getElementById('btn-new').disabled = false;
+    document.getElementById('btn-sides').disabled = false;
+    const mv = line.split(' ')[1];
+    if (!mv || mv === '(none)' || mv === 'null') {
+      setStatus('Engine has no legal moves.');
+      gameOver = true;
+      return;
+    }
+    const from = mv.slice(0, 2), to = mv.slice(2, 4), promo = mv[4];
+    const result = game.move({ from, to, promotion: promo || undefined });
+    if (result) {
+      lastMove = { from, to };
+      renderBoard();
+      sendPositionToEngine();
+      checkGameOver() || setStatus(`Your turn (${playerColor === 'w' ? 'White' : 'Black'})`);
+    }
+  }
+}
+
+function checkGameOver() {
+  if (game.in_checkmate()) {
+    setStatus(game.turn() === 'w' ? 'Checkmate — Black wins!' : 'Checkmate — White wins!');
+    gameOver = true; return true;
+  }
+  if (game.in_draw()) {
+    setStatus('Draw!'); gameOver = true; return true;
+  }
+  if (game.in_check()) setStatus(game.turn() === 'w' ? 'White is in check!' : 'Engine is in check…');
+  return false;
+}
+
+// ── Controls ─────────────────────────────────────────────────────────────────
+
+document.getElementById('btn-new').addEventListener('click', () => {
+  game = new Chess();
+  lastMove = null; selectedAlg = null; legalTargets = new Set();
+  engineThinking = false; gameOver = false;
+  document.getElementById('engine-info').textContent = '–';
+  engineSend('ucinewgame');
+  renderBoard();
+  if (playerColor === 'w') {
+    setStatus('Your turn (White)');
+  } else {
+    setStatus('Engine thinking…');
+    sendPositionToEngine();
+    triggerEngineMove();
+  }
+});
+
+document.getElementById('btn-sides').addEventListener('click', () => {
+  playerColor = playerColor === 'w' ? 'b' : 'w';
+  boardFlipped = playerColor === 'b';
+  document.getElementById('btn-sides').textContent =
+    playerColor === 'w' ? 'Play as Black' : 'Play as White';
+  document.getElementById('subtitle').textContent =
+    playerColor === 'w' ? 'You play White · Engine plays Black' : 'You play Black · Engine plays White';
+  selectedAlg = null; legalTargets = new Set();
+  renderBoard();
+  if (game.turn() !== playerColor) {
+    triggerEngineMove();
+  } else {
+    setStatus(`Your turn (${playerColor === 'w' ? 'White' : 'Black'})`);
+  }
+});
+
+document.getElementById('btn-flip').addEventListener('click', () => {
+  boardFlipped = !boardFlipped; renderBoard();
+});
+
+document.getElementById('btn-pgn').addEventListener('click', () => {
+  const pgn = game.pgn({ max_width: 80, newline_char: '\n' });
+  const blob = new Blob([pgn], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'limerikk.pgn';
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+// ── Engine comms ─────────────────────────────────────────────────────────────
+
+let worker = null;
+
+function engineSend(cmd) {
+  logLine(cmd, 'in');
+  worker.postMessage({ type: 'send', cmd });
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function setStatus(msg) { document.getElementById('status-text').textContent = msg; }
+
+function logLine(text, dir) {
+  const box = document.getElementById('log');
+  const div = document.createElement('div');
+  div.className = dir;
+  div.textContent = (dir === 'in' ? '→ ' : '← ') + text;
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+
+renderBoard();
+worker = new Worker('worker.js');
+
+worker.onmessage = (e) => {
+  if (e.data.type === 'ready') {
+    document.getElementById('loading-overlay').style.display = 'none';
+    engineReady = true;
+    engineSend('uci');
+    setStatus('Your turn (White)');
+    document.getElementById('btn-new').disabled = false;
+    document.getElementById('btn-sides').disabled = false;
+  } else if (e.data.type === 'output') {
+    onEngineOutput(e.data.line);
+  } else if (e.data.type === 'error') {
+    document.querySelector('#loading-overlay p').textContent = 'Error: ' + e.data.message;
+  }
+};
+
+worker.onerror = (e) => { setStatus('Worker error: ' + e.message); console.error(e); };
+</script>
+</body>
+</html>

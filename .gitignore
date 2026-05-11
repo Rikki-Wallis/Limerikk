@@ -7,3 +7,4 @@
 /engine/
 *.pt
 out
+.DS_Store

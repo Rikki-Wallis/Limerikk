@@ -1,5 +1,5 @@
 #include "polyglot_random.h"
-#include "blunderfish.h"
+#include "limerikk.h"
 #include "opening_book.h"
 
 #include <fstream>

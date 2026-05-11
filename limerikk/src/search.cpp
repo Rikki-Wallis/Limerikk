@@ -4,7 +4,7 @@
 #include <algorithm>
 #include <unordered_set>
 
-#include "blunderfish.h"
+#include "limerikk.h"
 
 constexpr int32_t BEST_MOVE_SCORE    = 2000000;
 constexpr int32_t GOOD_CAPTURE_SCORE = 900000;

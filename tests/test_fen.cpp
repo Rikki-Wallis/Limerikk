@@ -1,6 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 
-#include "blunderfish.h"
+#include "limerikk.h"
 
 static void test_fen(Position& pos, int depth) {
     std::string fen = pos.fen();

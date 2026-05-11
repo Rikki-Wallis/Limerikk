@@ -2,7 +2,7 @@
 
 #include <unordered_set>
 
-#include "blunderfish.h"
+#include "limerikk.h"
 
 static void test_capture_gen(Position& pos, int depth) {
     MoveList moves = pos.generate_moves();

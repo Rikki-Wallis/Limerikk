@@ -1,5 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
-#include "blunderfish.h"
+#include "limerikk.h"
 
 static void check_eval(Position& position) {
     int64_t new_eval = position.compute_eval();
