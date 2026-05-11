@@ -1,5 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
-#include "blunderfish.h"
+#include "limerikk.h"
 #include <array>
 
 void zobrist_search(int depth, Position& position) {

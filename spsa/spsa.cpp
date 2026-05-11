@@ -6,7 +6,7 @@
 #include <fstream>
 
 #include "balanced_openings.h"
-#include "blunderfish.h"
+#include "limerikk.h"
 
 std::mt19937 rng(std::random_device{}());
 std::uniform_int_distribution<int> twin_dist(0, 1);

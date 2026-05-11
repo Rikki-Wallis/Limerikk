@@ -1,6 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 
-#include "blunderfish.h"
+#include "limerikk.h"
 
 TEST_CASE("Perft - Starting Position") {
     Position pos = *Position::parse_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");

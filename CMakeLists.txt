@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(Blunderfish LANGUAGES CXX)
+project(Limerikk LANGUAGES CXX)
 
 include(CTest)
 enable_testing()
@@ -20,7 +20,7 @@ endif()
 
 add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
 
-add_subdirectory(blunderfish)
+add_subdirectory(limerikk)
 add_subdirectory(uci)
 add_subdirectory(tests)
 add_subdirectory(benchmark)

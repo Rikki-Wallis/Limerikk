@@ -1,6 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 #include <string>
-#include "blunderfish.h"
+#include "limerikk.h"
 
 TEST_CASE("Polyglot - Starting Position") {
 

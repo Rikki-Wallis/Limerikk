@@ -5,7 +5,7 @@
 #include <iostream>
 #include <atomic>
 
-#include "blunderfish.h"
+#include "limerikk.h"
 
 static const char* START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
@@ -133,8 +133,8 @@ EMSCRIPTEN_KEEPALIVE void uci_send(const char* cmd) {
     std::string line(cmd);
 
     if (line == "uci") {
-        std::cout << "id name blunderfish\n";
-        std::cout << "id author jerikki\n";
+        std::cout << "id name limerikk\n";
+        std::cout << "id author Jeremy and Rikki\n";
         std::cout << "uciok\n";
     } else if (line == "isready") {
         std::cout << "readyok\n";

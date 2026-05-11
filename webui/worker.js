@@ -1,13 +1,13 @@
-// Web Worker — loads the Blunderfish WASM module and bridges UCI I/O.
+// Web Worker — loads the WASM module and bridges UCI I/O.
 // No pthreads / SharedArrayBuffer needed.
 
-importScripts("blunderfish_wasm.js");
+importScripts("limerikk_wasm.js");
 
 let Module = null;
 let uci_send  = null;
 let uci_flush = null;
 
-BlunderfishUCI({
+LimerikkUCI({
     print:    (msg) => console.log("[engine]", msg),
     printErr: (msg) => console.warn("[engine]", msg),
 }).then((mod) => {

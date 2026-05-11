@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Blunderfish</title>
+<title>Limerikk</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -159,7 +159,7 @@
   <p>Loading engine…</p>
 </div>
 
-<h1>Blunderfish</h1>
+<h1>Limerikk</h1>
 <p class="subtitle">You play White · Engine plays Black</p>
 
 <div class="layout">
@@ -426,7 +426,7 @@ document.getElementById('btn-pgn').addEventListener('click', () => {
   const blob = new Blob([pgn], { type: 'text/plain' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'blunderfish.pgn';
+  a.download = 'limerikk.pgn';
   a.click();
   URL.revokeObjectURL(a.href);
 });

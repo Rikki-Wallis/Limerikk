@@ -1,7 +1,7 @@
 #include <array>
 #include <bit>
 
-#include "blunderfish.h"
+#include "limerikk.h"
 #include "generated_tables.h"
 
 static constexpr std::array<std::array<uint32_t, 64>, 2> gen_rook_castle_flag_table() {

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(BlunderfishWASM LANGUAGES CXX)
+project(LimerikkWASM LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -16,23 +16,23 @@ add_compile_options(
 add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
 
 set(GENERATED_DIR    ${CMAKE_SOURCE_DIR}/../generated)
-set(BLUNDERFISH_SRC  ${CMAKE_SOURCE_DIR}/../blunderfish/src)
+set(LIMERIKK_SRC  ${CMAKE_SOURCE_DIR}/../limerikk/src)
 
-file(GLOB_RECURSE BLUNDERFISH_SOURCES CONFIGURE_DEPENDS ${BLUNDERFISH_SRC}/*.cpp)
+file(GLOB_RECURSE LIMERIKK_SOURCES CONFIGURE_DEPENDS ${LIMERIKK_SRC}/*.cpp)
 
-add_library(blunderfish STATIC ${BLUNDERFISH_SOURCES})
-target_include_directories(blunderfish PUBLIC  ${BLUNDERFISH_SRC})
-target_include_directories(blunderfish PRIVATE ${GENERATED_DIR})
+add_library(limerikk STATIC ${LIMERIKK_SOURCES})
+target_include_directories(limerikk PUBLIC  ${LIMERIKK_SRC})
+target_include_directories(limerikk PRIVATE ${GENERATED_DIR})
 
-add_executable(blunderfish_wasm wasm_main.cpp)
-target_link_libraries(blunderfish_wasm PRIVATE blunderfish)
+add_executable(limerikk_wasm wasm_main.cpp)
+target_link_libraries(limerikk_wasm PRIVATE limerikk)
 
-target_link_options(blunderfish_wasm PRIVATE
+target_link_options(limerikk_wasm PRIVATE
     -sALLOW_MEMORY_GROWTH=1
     -sINITIAL_MEMORY=67108864
     -sSTACK_SIZE=8388608
     -sMODULARIZE=1
-    -sEXPORT_NAME=BlunderfishUCI
+    -sEXPORT_NAME=LimerikkUCI
     -sEXPORTED_FUNCTIONS=_main,_uci_init,_uci_send,_uci_flush
     -sEXPORTED_RUNTIME_METHODS=ccall,cwrap
     -sEXIT_RUNTIME=0

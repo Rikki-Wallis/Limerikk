@@ -9,7 +9,7 @@
 //#error "No intrinsics supported for NNUE"
 #endif
 
-#include "blunderfish.h"
+#include "limerikk.h"
 
 #if 1
 #include "nnue_embed.h"
