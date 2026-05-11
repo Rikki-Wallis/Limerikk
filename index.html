@@ -419,7 +419,10 @@ function onSquareClick(alg) {
 }
 
 function sendPositionToEngine() {
-  engineSend(`position fen ${game.fen()}`);
+  const moves = game.history({ verbose: true })
+    .map(m => m.from + m.to + (m.promotion || ''))
+    .join(' ');
+  engineSend(moves.length ? `position startpos moves ${moves}` : 'position startpos');
 }
 
 function triggerEngineMove() {
