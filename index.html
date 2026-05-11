@@ -493,9 +493,11 @@ function onEngineOutput(line) {
     const seldepth = line.match(/seldepth (\d+)/);
     const score    = line.match(/score (cp|mate) (-?\d+)/);
     if (depth && score) {
-      const cp = score[1] === 'mate' ? null : parseInt(score[2]) / 100;
+      const sign = game.turn() === 'w' ? 1 : -1;
+      const cp = score[1] === 'mate' ? null : sign * parseInt(score[2]) / 100;
+      const mateVal = score[1] === 'mate' ? sign * parseInt(score[2]) : null;
       const scoreStr = score[1] === 'mate'
-        ? `Mate in ${Math.abs(parseInt(score[2]))}`
+        ? (mateVal > 0 ? '+' : '−') + `Mate in ${Math.abs(mateVal)}`
         : (cp >= 0 ? '+' : '') + cp.toFixed(2);
       const scoreClass = score[1] === 'mate' ? 'score-mate'
         : cp > 0.2 ? 'score-pos' : cp < -0.2 ? 'score-neg' : 'score-even';
