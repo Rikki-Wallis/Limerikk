@@ -3,16 +3,18 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-store">
 <title>Limerikk</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;600&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  button, select, input { font-family: inherit; }
 
   body {
     font-family: 'Inter', system-ui, sans-serif;
-    background: #0a0a0a;
-    color: #e8e8e8;
+    background: #262421;
+    color: #bababa;
     min-height: 100vh;
     display: flex;
     flex-direction: column;
@@ -21,19 +23,17 @@
   }
 
   h1 {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 3rem;
-    letter-spacing: .12em;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 2.4rem;
+    font-weight: 800;
+    letter-spacing: .02em;
     color: #fff;
-    margin-bottom: 2px;
-    text-shadow: 0 0 40px rgba(220,50,50,.4);
+    margin-bottom: 16px;
   }
-  .subtitle {
-    font-size: .8rem;
-    color: #555;
-    letter-spacing: .1em;
-    text-transform: uppercase;
-    margin-bottom: 32px;
+  .page-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .layout {
@@ -47,13 +47,12 @@
   /* Board */
   #board-wrap {
     position: relative;
-    box-shadow: 0 0 0 1px #222, 0 8px 48px rgba(0,0,0,.8);
+    box-shadow: 0 4px 24px rgba(0,0,0,.6);
+    border-radius: 2px;
+    overflow: hidden;
   }
   :root {
     --board-size: min(calc(100vh - 164px), calc(100vw - 352px));
-  }
-  @media (max-width: 650px) {
-    :root { --board-size: 90vw; }
   }
   #board {
     display: grid;
@@ -72,15 +71,14 @@
     z-index: 0;
     transition: filter .1s;
   }
-  .sq:hover { filter: brightness(1.1); }
   .sq img.piece {
     width: 85%;
     height: 85%;
     object-fit: contain;
     pointer-events: none;
   }
-  .sq.light { background: #769656; }
-  .sq.dark  { background: #eeeed2; }
+  .sq.light { background: #f0d9b5; }
+  .sq.dark  { background: #b58863; }
   .sq.selected { outline: 3px solid #f6f669; outline-offset: -3px; }
   .sq.legal-target::after {
     content: '';
@@ -103,128 +101,153 @@
     pointer-events: none;
     z-index: 1;
   }
-  .sq.last-move.light { background: #cdd16f; }
-  .sq.last-move.dark  { background: #aaa23a; }
+  .sq.last-move.light { background: #d4e06a; }
+  .sq.last-move.dark  { background: #b4a629; }
   .coord-file {
     position: absolute; bottom: 2px; right: 3px;
     font-size: 10px; font-weight: 700;
-    color: rgba(255,255,255,.5);
+    color: rgba(0,0,0,.35);
     z-index: 1;
   }
   .coord-rank {
     position: absolute; top: 2px; left: 3px;
     font-size: 10px; font-weight: 700;
-    color: rgba(255,255,255,.5);
+    color: rgba(0,0,0,.35);
     z-index: 1;
   }
-  .sq.dark .coord-file, .sq.dark .coord-rank { color: rgba(0,0,0,.35); }
+  .sq.dark .coord-file, .sq.dark .coord-rank { color: rgba(255,255,255,.4); }
 
   /* Panel */
   .panel {
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: 10px;
     width: min(260px, 90vw);
   }
 
   .card {
-    background: #111;
-    border: 1px solid #1e1e1e;
-    border-radius: 4px;
+    background: #302e2b;
+    border: 1px solid #3d3a36;
+    border-radius: 6px;
     padding: 14px;
   }
   .card-label {
-    font-size: .68rem;
+    font-size: .8rem;
     font-weight: 600;
-    letter-spacing: .12em;
-    text-transform: uppercase;
-    color: #444;
+    color: #7a7876;
     margin-bottom: 6px;
   }
 
-  #status-text {
-    font-size: .95rem;
+  #status-text, #player-side {
+    font-size: 1rem;
     font-weight: 600;
     color: #fff;
   }
   #engine-info {
-    font-size: .82rem;
-    color: #888;
-    white-space: pre-line;
     min-height: 2.4em;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
   }
+  .engine-stat {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  .estat-label {
+    font-size: .8rem;
+    color: #7a7876;
+    font-weight: 600;
+  }
+  .estat-value {
+    font-size: .95rem;
+    font-weight: 700;
+    color: #fff;
+  }
+  .seldepth { font-weight: 400; color: #7a7876; }
+  .score-pos  { color: #81b64c; }
+  .score-neg  { color: #e06060; }
+  .score-even { color: #bababa; }
+  .score-mate { color: #f0c040; }
 
-  .controls { display: flex; gap: 8px; flex-wrap: wrap; }
+  .controls { display: flex; flex-direction: column; gap: 8px; }
+  .controls button { width: 100%; }
   button {
     padding: 8px 14px;
     border: 1px solid transparent;
-    border-radius: 3px;
+    border-radius: 6px;
     cursor: pointer;
-    font-family: 'Inter', system-ui, sans-serif;
-    font-size: .8rem;
+    font-size: .95rem;
     font-weight: 600;
-    letter-spacing: .04em;
-    text-transform: uppercase;
+    letter-spacing: .01em;
     transition: opacity .15s, background .15s;
   }
   button:disabled { opacity: .3; cursor: default; }
 
-  .btn-new   { background: #dc3232; color: #fff; border-color: #dc3232; }
-  .btn-new:hover:not(:disabled)   { background: #ff4444; }
-  .btn-flip  { background: transparent; color: #666; border-color: #333; }
-  .btn-flip:hover:not(:disabled)  { border-color: #666; color: #999; }
-  .btn-sides { background: transparent; color: #aaa; border-color: #333; }
-  .btn-sides:hover:not(:disabled) { border-color: #666; color: #fff; }
-  .btn-pgn   { background: transparent; color: #555; border-color: #222; }
-  .btn-pgn:hover:not(:disabled)   { color: #aaa; border-color: #555; }
+  .btn-new   { background: #81b64c; color: #fff; border-color: #81b64c; }
+  .btn-new:hover:not(:disabled)   { background: #629924; border-color: #629924; }
+  .btn-flip  { background: #3d3a36; color: #bababa; border-color: #4a4845; }
+  .btn-flip:hover:not(:disabled)  { background: #4a4845; color: #fff; }
+  .btn-sides { background: #3d3a36; color: #bababa; border-color: #4a4845; }
+  .btn-sides:hover:not(:disabled) { background: #4a4845; color: #fff; }
+  .btn-pgn   { background: #3d3a36; color: #9a9896; border-color: #4a4845; }
+  .btn-pgn:hover:not(:disabled)   { background: #4a4845; color: #fff; }
 
-  .time-row { display: flex; align-items: center; gap: 10px; font-size: .8rem; }
-  .time-row label { color: #444; text-transform: uppercase; letter-spacing: .08em; font-size: .72rem; font-weight: 600; }
+  .time-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: .8rem; }
+  .time-row select { flex: 1; }
+  .time-row label { color: #7a7876; font-size: .9rem; font-weight: 600; }
   .time-row select {
-    background: #0a0a0a;
-    color: #ccc;
-    border: 1px solid #2a2a2a;
-    border-radius: 3px;
+    background: #3d3a36;
+    color: #bababa;
+    border: 1px solid #4a4845;
+    border-radius: 6px;
     padding: 5px 8px;
-    font-size: .8rem;
+    font-size: .9rem;
   }
 
   .log-box {
-    background: #050505;
-    border: 1px solid #1a1a1a;
-    border-radius: 4px;
+    background: #1e1c1a;
+    border: 1px solid #3d3a36;
+    border-radius: 6px;
     padding: 10px;
     height: 160px;
     overflow-y: auto;
     font-family: 'Courier New', monospace;
-    font-size: .7rem;
-    color: #333;
+    font-size: .75rem;
   }
-  .log-box .out { color: #555; }
-  .log-box .in  { color: #3a3a3a; }
+  .log-box .out { color: #6a6866; }
+  .log-box .in  { color: #4a4846; }
 
   /* Loading */
   #loading-overlay {
     position: fixed; inset: 0;
-    background: #0a0a0a;
+    background: #262421;
     display: flex; flex-direction: column;
     align-items: center; justify-content: center;
     gap: 20px; z-index: 100;
   }
   #loading-overlay p {
     font-size: .85rem;
-    color: #444;
+    color: #7a7876;
     text-transform: uppercase;
     letter-spacing: .15em;
   }
   .spinner {
     width: 40px; height: 40px;
-    border: 2px solid #1a1a1a;
-    border-top-color: #dc3232;
+    border: 2px solid #3d3a36;
+    border-top-color: #81b64c;
     border-radius: 50%;
     animation: spin .7s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
+
+  @media (max-width: 650px), (max-aspect-ratio: 1/1) {
+    :root { --board-size: 90vw; }
+    .page-wrap { width: 100%; }
+    .page-wrap h1 { margin-left: calc((100% - 90vw) / 2); }
+    .layout { flex-direction: column; align-items: center; width: 90vw; margin: 0 auto; }
+    .panel { width: 100%; }
+  }
 </style>
 </head>
 <body>
@@ -234,8 +257,8 @@
   <p>Loading engine…</p>
 </div>
 
+<div class="page-wrap">
 <h1>Limerikk</h1>
-<p class="subtitle" id="subtitle">You play White · Engine plays Black</p>
 
 <div class="layout">
   <div id="board-wrap">
@@ -243,6 +266,11 @@
   </div>
 
   <div class="panel">
+    <div class="card">
+      <div class="card-label">Playing as</div>
+      <span id="player-side">White</span>
+    </div>
+
     <div class="card">
       <div class="card-label">Status</div>
       <span id="status-text">Connecting…</span>
@@ -253,13 +281,6 @@
       <img id="monkey" src="https://preview.redd.it/the-original-image-of-the-monkey-thinking-meme-v0-ea1hkdjnx9af1.jpeg?auto=webp&s=becb6ced6bb0749959ddc0c27286cbf909699aa3"
         style="display:none;width:100%;border-radius:3px;margin-bottom:8px;" alt="thinking">
       <span id="engine-info">–</span>
-    </div>
-
-    <div class="controls">
-      <button class="btn-new"   id="btn-new"   disabled>New Game</button>
-      <button class="btn-flip"  id="btn-flip">Flip</button>
-      <button class="btn-sides" id="btn-sides" disabled>Play as Black</button>
-      <button class="btn-pgn"   id="btn-pgn">PGN</button>
     </div>
 
     <div class="time-row">
@@ -293,7 +314,16 @@
     </div>
 
     <div class="log-box" id="log"></div>
+
+    <button class="btn-new" id="btn-new" disabled style="width:100%">New Game</button>
+
+    <div class="controls">
+      <button class="btn-flip"  id="btn-flip">Flip Board</button>
+      <button class="btn-sides" id="btn-sides" disabled>Play as Black</button>
+      <button class="btn-pgn"   id="btn-pgn">Download PGN</button>
+    </div>
   </div>
+</div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
@@ -463,14 +493,16 @@ function onEngineOutput(line) {
     const seldepth = line.match(/seldepth (\d+)/);
     const score    = line.match(/score (cp|mate) (-?\d+)/);
     if (depth && score) {
+      const cp = score[1] === 'mate' ? null : parseInt(score[2]) / 100;
       const scoreStr = score[1] === 'mate'
         ? `Mate in ${Math.abs(parseInt(score[2]))}`
-        : `${(parseInt(score[2]) / 100).toFixed(2)}`;
-      const depthStr = seldepth
-        ? `${depth[1]}/${seldepth[1]}`
-        : depth[1];
-      document.getElementById('engine-info').textContent =
-        `Depth ${depthStr}  Score ${scoreStr}`;
+        : (cp >= 0 ? '+' : '') + cp.toFixed(2);
+      const scoreClass = score[1] === 'mate' ? 'score-mate'
+        : cp > 0.2 ? 'score-pos' : cp < -0.2 ? 'score-neg' : 'score-even';
+      const depthStr = seldepth ? `${depth[1]}<span class="seldepth"> (Reached ${seldepth[1]})</span>` : depth[1];
+      document.getElementById('engine-info').innerHTML = `
+        <div class="engine-stat"><span class="estat-label">Depth</span><span class="estat-value">${depthStr}</span></div>
+        <div class="engine-stat"><span class="estat-label">Score</span><span class="estat-value ${scoreClass}">${scoreStr}</span></div>`;
     }
   }
 
@@ -531,8 +563,8 @@ document.getElementById('btn-sides').addEventListener('click', () => {
   boardFlipped = playerColor === 'b';
   document.getElementById('btn-sides').textContent =
     playerColor === 'w' ? 'Play as Black' : 'Play as White';
-  document.getElementById('subtitle').textContent =
-    playerColor === 'w' ? 'You play White · Engine plays Black' : 'You play Black · Engine plays White';
+  document.getElementById('player-side').textContent =
+    playerColor === 'w' ? 'White' : 'Black';
   selectedAlg = null; legalTargets = new Set();
   renderBoard();
   if (game.turn() !== playerColor) {
@@ -604,7 +636,7 @@ function logLine(text, dir) {
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
 renderBoard();
-worker = new Worker('worker.js');
+worker = new Worker('worker.js?v=' + Date.now());
 
 worker.onmessage = (e) => {
   if (e.data.type === 'ready') {

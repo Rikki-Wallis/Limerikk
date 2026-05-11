@@ -1,13 +1,15 @@
 // Web Worker — loads the WASM module and bridges UCI I/O.
 // No pthreads / SharedArrayBuffer needed.
 
-importScripts("limerikk_wasm.js");
+const _v = new URL(self.location.href).searchParams.get('v') || Date.now();
+importScripts("limerikk_wasm.js?v=" + _v);
 
 let Module = null;
 let uci_send  = null;
 let uci_flush = null;
 
 LimerikkUCI({
+    locateFile: (path) => path + '?v=' + _v,
     print:    (msg) => console.log("[engine]", msg),
     printErr: (msg) => console.warn("[engine]", msg),
 }).then((mod) => {
