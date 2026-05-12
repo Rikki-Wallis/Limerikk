@@ -170,6 +170,41 @@
   .score-even { color: #bababa; }
   .score-mate { color: #f0c040; }
 
+  #eval-bar-wrap {
+    width: 20px;
+    height: var(--board-size);
+    position: relative;
+    flex-shrink: 0;
+  }
+  #eval-bar-bg {
+    position: absolute;
+    inset: 0;
+    background: #1a1a1a;
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  #eval-bar-fill {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    background: #ededed;
+    transition: height .25s ease;
+    height: 50%;
+  }
+  #eval-score-label {
+    position: absolute;
+    left: 50%;
+    bottom: 50%;
+    transform: translate(-50%, 50%);
+    font-size: .6rem;
+    font-weight: 700;
+    white-space: nowrap;
+    pointer-events: none;
+    transition: none;
+  }
+  @media (max-width: 650px), (max-aspect-ratio: 1/1) {
+    #eval-bar-wrap { display: none; }
+  }
+
   .controls { display: flex; flex-direction: column; gap: 8px; }
   .controls button { width: 100%; }
   button {
@@ -261,6 +296,13 @@
 <h1>Limerikk</h1>
 
 <div class="layout">
+  <div id="eval-bar-wrap">
+    <div id="eval-bar-bg">
+      <div id="eval-bar-fill"></div>
+    </div>
+    <span id="eval-score-label">0.0</span>
+  </div>
+
   <div id="board-wrap">
     <div id="board"></div>
   </div>
@@ -515,6 +557,7 @@ function onEngineOutput(line) {
         <div class="engine-stat"><span class="estat-label">Depth</span><span class="estat-value">${depthStr}</span></div>
         <div class="engine-stat"><span class="estat-label">Score</span><span class="estat-value ${scoreClass}">${scoreStr}</span></div>
         ${npsRow}`;
+      updateEvalBar(cp, mateVal);
     }
   }
 
@@ -559,6 +602,7 @@ document.getElementById('btn-new').addEventListener('click', () => {
   lastMove = null; selectedAlg = null; legalTargets = new Set();
   engineThinking = false; gameOver = false;
   document.getElementById('engine-info').textContent = '–';
+  updateEvalBar(0, null);
   engineSend('ucinewgame');
   renderBoard();
   if (playerColor === 'w') {
@@ -573,6 +617,7 @@ document.getElementById('btn-new').addEventListener('click', () => {
 document.getElementById('btn-sides').addEventListener('click', () => {
   playerColor = playerColor === 'w' ? 'b' : 'w';
   boardFlipped = playerColor === 'b';
+  updateEvalBar(lastEvalCp, lastEvalMate);
   document.getElementById('btn-sides').textContent =
     playerColor === 'w' ? 'Play as Black' : 'Play as White';
   document.getElementById('player-side').textContent =
@@ -587,7 +632,7 @@ document.getElementById('btn-sides').addEventListener('click', () => {
 });
 
 document.getElementById('btn-flip').addEventListener('click', () => {
-  boardFlipped = !boardFlipped; renderBoard();
+  boardFlipped = !boardFlipped; renderBoard(); updateEvalBar(lastEvalCp, lastEvalMate);
 });
 
 document.getElementById('btn-pgn').addEventListener('click', () => {
@@ -636,6 +681,43 @@ function engineSend(cmd) {
 
 function setStatus(msg) { document.getElementById('status-text').textContent = msg; }
 
+let lastEvalCp = 0, lastEvalMate = null;
+
+function updateEvalBar(cp, mateVal) {
+  lastEvalCp = cp; lastEvalMate = mateVal;
+  let pct, labelText;
+  const whiteWinning = mateVal !== null ? mateVal > 0 : cp >= 0;
+  if (mateVal !== null) {
+    pct = mateVal > 0 ? 100 : 0;
+    labelText = 'M' + Math.abs(mateVal);
+  } else {
+    pct = 50 + 50 * Math.tanh(cp / 6);
+    labelText = Math.abs(cp).toFixed(1);
+  }
+  pct = Math.max(0, Math.min(100, pct));
+
+  const fill  = document.getElementById('eval-bar-fill');
+  const label = document.getElementById('eval-score-label');
+
+  fill.style.height = pct + '%';
+  if (boardFlipped) {
+    fill.style.bottom = 'auto'; fill.style.top = '0';
+  } else {
+    fill.style.top = 'auto'; fill.style.bottom = '0';
+  }
+
+  const labelOnWhiteSide = whiteWinning !== boardFlipped;
+  if (labelOnWhiteSide) {
+    label.style.top = 'auto'; label.style.bottom = '4px';
+    label.style.color = '#262421';
+  } else {
+    label.style.bottom = 'auto'; label.style.top = '4px';
+    label.style.color = '#bababa';
+  }
+  label.style.transform = 'translate(-50%, 0%)';
+  label.textContent = labelText;
+}
+
 function logLine(text, dir) {
   const box = document.getElementById('log');
   const div = document.createElement('div');
@@ -648,6 +730,7 @@ function logLine(text, dir) {
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
 renderBoard();
+updateEvalBar(0, null);
 worker = new Worker('worker.js?v=' + Date.now());
 
 worker.onmessage = (e) => {
