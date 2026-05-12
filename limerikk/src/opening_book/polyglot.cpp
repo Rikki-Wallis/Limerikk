@@ -140,18 +140,19 @@ Move Position::decode_polyglot(PolyglotEntry move) {
         case 4: end_piece = PIECE_QUEEN;  type = MOVE_PROMOTION; break;
     }
 
-    // Catch castle moves
+    // Catch castle moves — polyglot encodes castling as king-to-rook (e1h1/e1a1),
+    // so remap to to the king's destination (g1/c1) to match internal representation.
     uint64_t to_bb = sq_to_bb(to);
     uint64_t from_bb = sq_to_bb(from);
 
-    if ((from_bb & (FILE_E & RANK_1)) && (to_bb & (FILE_G & RANK_1))) {
-        type = MOVE_SHORT_CASTLE;
-    } else if ((from_bb & (FILE_E & RANK_1)) && (to_bb & (FILE_C & RANK_1))) {
-        type = MOVE_LONG_CASTLE;
-    } else if ((from_bb & (FILE_E & RANK_8)) && (to_bb & (FILE_G & RANK_8))) {
-        type = MOVE_SHORT_CASTLE;
-    } else if ((from_bb & (FILE_E & RANK_8)) && (to_bb & (FILE_C & RANK_8))) {
-        type = MOVE_LONG_CASTLE;
+    if ((from_bb & (FILE_E & RANK_1)) && (to_bb & (FILE_H & RANK_1))) {
+        type = MOVE_SHORT_CASTLE; to = 6;
+    } else if ((from_bb & (FILE_E & RANK_1)) && (to_bb & (FILE_A & RANK_1))) {
+        type = MOVE_LONG_CASTLE; to = 2;
+    } else if ((from_bb & (FILE_E & RANK_8)) && (to_bb & (FILE_H & RANK_8))) {
+        type = MOVE_SHORT_CASTLE; to = 62;
+    } else if ((from_bb & (FILE_E & RANK_8)) && (to_bb & (FILE_A & RANK_8))) {
+        type = MOVE_LONG_CASTLE; to = 58;
     }
 
     // Catch en passant moves
