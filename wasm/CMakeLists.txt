@@ -5,6 +5,8 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -msimd128 -DNDEBUG" CACHE STRING "" FORCE)
+
 add_compile_options(
     -Wall -Wextra
     -Wno-unused-const-variable
@@ -27,6 +29,8 @@ add_executable(limerikk_wasm wasm_main.cpp)
 target_link_libraries(limerikk_wasm PRIVATE limerikk)
 
 target_link_options(limerikk_wasm PRIVATE
+    -O3
+    -msimd128
     -sALLOW_MEMORY_GROWTH=1
     -sINITIAL_MEMORY=67108864
     -sSTACK_SIZE=8388608

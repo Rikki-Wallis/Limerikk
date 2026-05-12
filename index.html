@@ -492,6 +492,7 @@ function onEngineOutput(line) {
     const depth    = line.match(/depth (\d+)/);
     const seldepth = line.match(/seldepth (\d+)/);
     const score    = line.match(/score (cp|mate) (-?\d+)/);
+    const nps      = line.match(/nps (\d+)/);
     if (depth && score) {
       const sign = game.turn() === 'w' ? 1 : -1;
       const cp = score[1] === 'mate' ? null : sign * parseInt(score[2]) / 100;
@@ -502,9 +503,18 @@ function onEngineOutput(line) {
       const scoreClass = score[1] === 'mate' ? 'score-mate'
         : cp > 0.2 ? 'score-pos' : cp < -0.2 ? 'score-neg' : 'score-even';
       const depthStr = seldepth ? `${depth[1]}<span class="seldepth"> (Reached ${seldepth[1]})</span>` : depth[1];
+      let npsRow = '';
+      if (nps) {
+        const n = parseInt(nps[1]);
+        const npsStr = n >= 1_000_000 ? (n / 1_000_000).toFixed(1) + 'M'
+                     : n >= 1_000     ? Math.round(n / 1_000) + 'k'
+                     : String(n);
+        npsRow = `<div class="engine-stat"><span class="estat-label">NPS</span><span class="estat-value">${npsStr}</span></div>`;
+      }
       document.getElementById('engine-info').innerHTML = `
         <div class="engine-stat"><span class="estat-label">Depth</span><span class="estat-value">${depthStr}</span></div>
-        <div class="engine-stat"><span class="estat-label">Score</span><span class="estat-value ${scoreClass}">${scoreStr}</span></div>`;
+        <div class="engine-stat"><span class="estat-label">Score</span><span class="estat-value ${scoreClass}">${scoreStr}</span></div>
+        ${npsRow}`;
     }
   }
 
