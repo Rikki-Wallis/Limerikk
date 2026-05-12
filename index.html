@@ -8,7 +8,9 @@
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
 
-  * { box-sizing: border-box; margin: 0; padding: 0; }
+  * { box-sizing: border-box; margin: 0; padding: 0; outline: none; }
+  *:focus, *:focus-visible { outline: none !important; box-shadow: none !important; }
+  button, select, input { -webkit-appearance: none; appearance: none; }
   button, select, input { font-family: inherit; }
 
   body {
@@ -127,6 +129,7 @@
 
   .card {
     background: #302e2b;
+    border: 1px solid #3d3a36;
     border-radius: 6px;
     padding: 14px;
   }
@@ -205,7 +208,7 @@
   .controls button { width: 100%; }
   button {
     padding: 8px 14px;
-    border: none;
+    border: 1px solid transparent;
     border-radius: 6px;
     cursor: pointer;
     font-size: .95rem;
@@ -215,22 +218,22 @@
   }
   button:disabled { opacity: .3; cursor: default; }
 
-  .btn-new   { background: linear-gradient(to bottom, #91c957, #6fa338); color: #fff; }
-  .btn-new:hover:not(:disabled)   { background: linear-gradient(to bottom, #82b84a, #5e8f2c); }
-  .btn-flip  { background: linear-gradient(to bottom, #4a4744, #363330); color: #bababa; }
+  .btn-new   { background: linear-gradient(to bottom, #91c957, #6fa338); color: #fff; border-color: #5d8e2e; }
+  .btn-new:hover:not(:disabled)   { background: linear-gradient(to bottom, #82b84a, #5e8f2c); border-color: #4e7a22; }
+  .btn-flip  { background: linear-gradient(to bottom, #4a4744, #363330); color: #bababa; border-color: #4a4845; }
   .btn-flip:hover:not(:disabled)  { background: linear-gradient(to bottom, #555250, #3e3b38); color: #fff; }
-  .btn-sides { background: linear-gradient(to bottom, #4a4744, #363330); color: #bababa; }
+  .btn-sides { background: linear-gradient(to bottom, #4a4744, #363330); color: #bababa; border-color: #4a4845; }
   .btn-sides:hover:not(:disabled) { background: linear-gradient(to bottom, #555250, #3e3b38); color: #fff; }
-  .btn-pgn   { background: linear-gradient(to bottom, #4a4744, #363330); color: #9a9896; }
+  .btn-pgn   { background: linear-gradient(to bottom, #4a4744, #363330); color: #9a9896; border-color: #4a4845; }
   .btn-pgn:hover:not(:disabled)   { background: linear-gradient(to bottom, #555250, #3e3b38); color: #fff; }
 
   .time-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: .8rem; }
   .time-row select { flex: 1; }
   .time-row label { color: #7a7876; font-size: .9rem; font-weight: 600; }
   .time-row select {
-    background: linear-gradient(to bottom, #4a4744, #363330);
+    background: #3d3a36;
     color: #bababa;
-    border: none;
+    border: 1px solid #4a4845;
     border-radius: 6px;
     padding: 5px 8px;
     font-size: .9rem;
@@ -238,7 +241,7 @@
 
   .log-box {
     background: #1e1c1a;
-    border: none;
+    border: 1px solid #3d3a36;
     border-radius: 6px;
     padding: 10px;
     height: 160px;
