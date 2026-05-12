@@ -262,7 +262,7 @@ int main() {
             
             thread = std::thread([&position, depth, &should_stop, time_s, node_budget](){
                 UCIBudgeter budgeter(node_budget, time_s);
-                Move move = position.best_move(depth, should_stop, &budgeter, {}, true);
+                Move move = position.think(depth, should_stop, &budgeter, {}, true);
                 std::cout << "bestmove " << to_uci_move(move) << "\n";
             });
         }

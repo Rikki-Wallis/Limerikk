@@ -843,7 +843,7 @@ Move Position::best_move(int depth, std::atomic<bool>& should_stop, Budgeter* bu
 /**
     Chooses between an opening move and searching for best move
  */
-Move Position::think(int depth, std::atomic<bool>& should_stop, Budgeter* budgeter, const SearchParameters& params_in, bool enable_uci_info) {
+Move Position::think(int depth, std::atomic<bool>& should_stop, Budgeter* budgeter, const SearchParameters& params, bool enable_uci_info, int64_t* score_out) {
     uint64_t hash = encode_polyglot();
     std::vector<PolyglotEntry> p_moves = probe_book(hash);
 
@@ -853,10 +853,8 @@ Move Position::think(int depth, std::atomic<bool>& should_stop, Budgeter* budget
         assert(is_move_legal_slow(move));
         return move;
     } else {
-
-        Move best = best_move(depth, should_stop, budgeter, params_in, enable_uci_info);
+        Move best = best_move(depth, should_stop, budgeter, params, enable_uci_info, score_out);
         assert(best != NULL_MOVE);
-    
         return best;
     }
 }

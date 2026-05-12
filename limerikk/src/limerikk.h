@@ -437,7 +437,7 @@ struct Position {
     bool is_move_legal_slow(Move move);
 
     std::optional<GameResult> game_result();
-    Move think(int depth, std::atomic<bool>& should_stop, Budgeter* budgeter = &null_budgeter, const SearchParameters& params_in = {}, bool enable_uci_info = false);
+    Move think(int depth, std::atomic<bool>& should_stop, Budgeter* budgeter = &null_budgeter, const SearchParameters& params = {}, bool enable_uci_info=false, int64_t* score_out=nullptr);
 
     uint64_t compute_zobrist() const;
 

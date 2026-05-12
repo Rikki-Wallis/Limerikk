@@ -463,6 +463,7 @@ let engineThinking = false;
 let engineReady = false;
 let gameOver = false;
 let playerColor = 'w';
+let engineGotInfo = false;
 
 function onSquareClick(alg) {
   if (!engineReady || engineThinking || game.turn() !== playerColor || gameOver) return;
@@ -530,6 +531,7 @@ function triggerEngineMove() {
   document.getElementById('btn-sides').disabled = true;
   const mt = parseInt(document.getElementById('movetime').value);
   const depth = parseInt(document.getElementById('maxdepth').value);
+  engineGotInfo = false;
   engineSend(`go movetime ${mt} depth ${depth}`);
 }
 
@@ -537,6 +539,7 @@ function onEngineOutput(line) {
   logLine(line, 'out');
 
   if (line.startsWith('info depth')) {
+    engineGotInfo = true;
     const depth    = line.match(/depth (\d+)/);
     const seldepth = line.match(/seldepth (\d+)/);
     const score    = line.match(/score (cp|mate) (-?\d+)/);
@@ -572,6 +575,8 @@ function onEngineOutput(line) {
     document.getElementById('monkey').style.display = 'none';
     document.getElementById('btn-new').disabled = false;
     document.getElementById('btn-sides').disabled = false;
+    if (!engineGotInfo)
+      document.getElementById('engine-info').innerHTML = '<div class="engine-stat"><span class="estat-label">Book</span></div>';
     const mv = line.split(' ')[1];
     if (!mv || mv === '(none)' || mv === 'null') {
       setStatus('Engine has no legal moves.');

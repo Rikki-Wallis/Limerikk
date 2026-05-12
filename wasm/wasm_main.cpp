@@ -159,7 +159,7 @@ EMSCRIPTEN_KEEPALIVE void uci_send(const char* cmd) {
         int depth = g.depth.value_or(40);
 
         UCIBudgeter budgeter(nodes, time_s);
-        Move move = g_position.best_move(depth, g_should_stop, &budgeter, {}, true);
+        Move move = g_position.think(depth, g_should_stop, &budgeter, {}, true);
         std::cout << "bestmove " << to_uci_move(move) << "\n";
     }
 }
