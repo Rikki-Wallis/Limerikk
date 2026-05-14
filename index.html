@@ -234,6 +234,7 @@
 
   .btn-new   { background: linear-gradient(to bottom, #91c957, #6fa338); color: #fff; border-color: #5d8e2e; }
   .btn-new:hover:not(:disabled)   { background: linear-gradient(to bottom, #82b84a, #5e8f2c); border-color: #4e7a22; }
+  .new-game-section { display: flex; flex-direction: column; gap: 8px; }
   .btn-flip  { background: linear-gradient(to bottom, #4a4744, #363330); color: #bababa; border-color: #4a4845; }
   .btn-flip:hover:not(:disabled)  { background: linear-gradient(to bottom, #555250, #3e3b38); color: #fff; }
   .btn-sides { background: linear-gradient(to bottom, #4a4744, #363330); color: #bababa; border-color: #4a4845; }
@@ -412,7 +413,21 @@
 
     <div class="log-box" id="log"></div>
 
-    <button class="btn-new" id="btn-new" disabled style="width:100%">New Game</button>
+    <div class="card new-game-section">
+      <div class="card-label">New Game</div>
+      <div class="time-row" style="margin-bottom:8px;">
+        <label>Odds</label>
+        <select id="odds">
+          <option value="none">None</option>
+          <option value="pawn">Pawn</option>
+          <option value="knight">Knight</option>
+          <option value="bishop">Bishop</option>
+          <option value="rook">Rook</option>
+          <option value="queen">Queen</option>
+        </select>
+      </div>
+      <button class="btn-new" id="btn-new" disabled style="width:100%">New Game</button>
+    </div>
 
     <div class="nav-row">
       <button class="btn-nav" id="btn-back" disabled>&#8592;</button>
@@ -426,6 +441,10 @@
       <button class="btn-sides" id="btn-sides" disabled>Play as Black</button>
       <button class="btn-pgn"   id="btn-pgn">Download PGN</button>
     </div>
+    <a href="https://github.com/Rikki-Wallis/Limerikk" target="_blank"
+       style="display:block;text-align:center;font-size:.75rem;color:#4a4845;text-decoration:none;padding-top:4px;">
+      github.com/Rikki-Wallis/Limerikk
+    </a>
   </div>
 </div>
 </div>
@@ -471,7 +490,7 @@ let viewIndex = null;
 function getViewState() {
   const history = game.history({ verbose: true });
   if (viewIndex === null) return { board: game.board(), viewLastMove: lastMove };
-  const tmp = new Chess();
+  const tmp = startFen === 'startpos' ? new Chess() : new Chess(startFen);
   for (let i = 0; i < viewIndex; i++) {
     const m = history[i];
     tmp.move({ from: m.from, to: m.to, promotion: m.promotion || undefined });
@@ -555,6 +574,27 @@ function renderBoard() {
   updateNavButtons();
 }
 
+// ── Odds ─────────────────────────────────────────────────────────────────────
+
+let startFen = 'startpos';
+
+const ODDS_FENS = {
+  b: { // engine plays Black
+    pawn:   'rnbqkbnr/ppppp1pp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+    knight: 'r1bqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+    bishop: 'rn1qkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+    rook:   '1nbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQk - 0 1',
+    queen:  'rnb1kbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+  },
+  w: { // engine plays White
+    pawn:   'rnbqkbnr/pppppppp/8/8/8/8/PPPPP1PP/RNBQKBNR w KQkq - 0 1',
+    knight: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/R1BQKBNR w KQkq - 0 1',
+    bishop: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RN1QKBNR w KQkq - 0 1',
+    rook:   'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/1NBQKBNR w Kkq - 0 1',
+    queen:  'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNB1KBNR w KQkq - 0 1',
+  },
+};
+
 // ── Game state ───────────────────────────────────────────────────────────────
 
 let engineThinking = false;
@@ -620,7 +660,8 @@ function sendPositionToEngine() {
   const moves = game.history({ verbose: true })
     .map(m => m.from + m.to + (m.promotion || ''))
     .join(' ');
-  engineSend(moves.length ? `position startpos moves ${moves}` : 'position startpos');
+  const start = startFen === 'startpos' ? 'startpos' : `fen ${startFen}`;
+  engineSend(moves.length ? `position ${start} moves ${moves}` : `position ${start}`);
 }
 
 function triggerEngineMove() {
@@ -711,7 +752,10 @@ function checkGameOver() {
 // ── Controls ─────────────────────────────────────────────────────────────────
 
 document.getElementById('btn-new').addEventListener('click', () => {
-  game = new Chess();
+  const oddsLevel = document.getElementById('odds').value;
+  const engineColor = playerColor === 'w' ? 'b' : 'w';
+  startFen = oddsLevel === 'none' ? 'startpos' : ODDS_FENS[engineColor][oddsLevel];
+  game = startFen === 'startpos' ? new Chess() : new Chess(startFen);
   lastMove = null; selectedAlg = null; legalTargets = new Set(); viewIndex = null; evalHistory = [];
   engineThinking = false; gameOver = false;
   document.getElementById('engine-info').textContent = '–';
@@ -783,6 +827,7 @@ document.getElementById('btn-pgn').addEventListener('click', () => {
     'BlackType', playerColor === 'b' ? 'human' : 'program',
     'TimeControl', `${mt / 1000}s/move depth ${depthStr}`
   );
+  if (startFen !== 'startpos') game.header('SetUp', '1', 'FEN', startFen);
 
   const pgn = game.pgn({ max_width: 80, newline_char: '\n' });
   const blob = new Blob([pgn], { type: 'text/plain' });
