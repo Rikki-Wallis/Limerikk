@@ -55,11 +55,11 @@ for epoch in range(num_epochs):
 
             white_features, white_indices, black_features, black_indices, target = result
 
-            target         = torch.from_numpy(np.array(target,         dtype=np.float32)).to(device, non_blocking=True)
-            white_features = torch.from_numpy(np.array(white_features, dtype=np.int64  )).to(device, non_blocking=True)
-            white_indices  = torch.from_numpy(np.array(white_indices,  dtype=np.int64  )).to(device, non_blocking=True)
-            black_features = torch.from_numpy(np.array(black_features, dtype=np.int64  )).to(device, non_blocking=True)
-            black_indices  = torch.from_numpy(np.array(black_indices,  dtype=np.int64  )).to(device, non_blocking=True)
+            target         = torch.from_numpy(target).to(device, non_blocking=True)
+            white_features = torch.from_numpy(white_features).to(device, non_blocking=True)
+            white_indices  = torch.from_numpy(white_indices ).to(device, non_blocking=True)
+            black_features = torch.from_numpy(black_features).to(device, non_blocking=True)
+            black_indices  = torch.from_numpy(black_indices ).to(device, non_blocking=True)
 
             optimizer.zero_grad(set_to_none=True)
 

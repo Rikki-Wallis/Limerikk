@@ -10,6 +10,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 byteorder = "1.5.0"
+numpy = "0.28"
 pyo3 = "0.28.3"
 rand = "0.10.1"
 rayon = "1"

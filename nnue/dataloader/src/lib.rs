@@ -42,6 +42,7 @@ impl Board {
 mod dataloader {
     use std::{fs::File, io::{BufReader, Cursor, Read}};
     use pyo3::prelude::*;
+    use numpy::{PyArray1, PyArrayMethods};
     use byteorder::{LittleEndian, ReadBytesExt};
     use rayon::prelude::*;
     use crate::Board;
@@ -249,7 +250,7 @@ mod dataloader {
             }
         }
 
-        fn get_batch(&mut self, batch_size: usize, blend: f32) -> Option<(Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)> {
+        fn get_batch<'py>(&mut self, py: Python<'py>, batch_size: usize, blend: f32) -> Option<(Py<PyArray1<i64>>, Py<PyArray1<i64>>, Py<PyArray1<i64>>, Py<PyArray1<i64>>, Py<PyArray1<f32>>)> {
             while self.buffer.len() < batch_size {
                 if self.load_chunk() {
                     break;
@@ -260,42 +261,59 @@ mod dataloader {
                 return None;
             }
 
-            let mut white_features = Vec::with_capacity(batch_size * 32);
-            let mut white_indices  = Vec::with_capacity(batch_size * 32);
-            let mut black_features = Vec::with_capacity(batch_size * 32);
-            let mut black_indices  = Vec::with_capacity(batch_size * 32);
-            let mut targets        = Vec::with_capacity(batch_size);
+            let n_features: usize = self.buffer.iter().rev().take(batch_size)
+                .map(|(bbs, _, _)| bbs.iter().map(|&bb| bb.count_ones() as usize).sum::<usize>())
+                .sum();
 
-            for b in 0..batch_size {
-                let (bbs, score, outcome) = self.buffer.pop().unwrap();
+            let wf_arr = PyArray1::<i64>::zeros(py, n_features, false);
+            let wi_arr = PyArray1::<i64>::zeros(py, n_features, false);
+            let bf_arr = PyArray1::<i64>::zeros(py, n_features, false);
+            let bi_arr = PyArray1::<i64>::zeros(py, n_features, false);
+            let t_arr  = PyArray1::<f32>::zeros(py, batch_size, false);
 
-                for (piece, &board) in bbs.iter().enumerate() {
-                    let mut board = board;
+            {
+                let mut wf = wf_arr.readwrite();
+                let mut wi = wi_arr.readwrite();
+                let mut bf = bf_arr.readwrite();
+                let mut bi = bi_arr.readwrite();
+                let mut t  = t_arr.readwrite();
 
-                    while board != 0 {
-                        let sq = board.trailing_zeros();
-                        board &= board - 1;
-                        white_features.push((piece*64) as u32 + sq);
-                        black_features.push((ENEMY_PIECE[piece]*64) as u32 + (sq^56));
-                        white_indices.push(b as u32);
-                        black_indices.push(b as u32);
+                let wf_s = wf.as_slice_mut().unwrap();
+                let wi_s = wi.as_slice_mut().unwrap();
+                let bf_s = bf.as_slice_mut().unwrap();
+                let bi_s = bi.as_slice_mut().unwrap();
+                let t_s  = t.as_slice_mut().unwrap();
+
+                let mut fi = 0usize;
+
+                for b in 0..batch_size {
+                    let (bbs, score, outcome) = self.buffer.pop().unwrap();
+
+                    for (piece, &board) in bbs.iter().enumerate() {
+                        let mut board = board;
+                        while board != 0 {
+                            let sq = board.trailing_zeros();
+                            board &= board - 1;
+                            wf_s[fi] = (piece * 64) as i64 + sq as i64;
+                            bf_s[fi] = (ENEMY_PIECE[piece] * 64) as i64 + (sq ^ 56) as i64;
+                            wi_s[fi] = b as _;
+                            bi_s[fi] = b as _;
+                            fi += 1;
+                        }
                     }
+
+                    let score_0_1   = 1.0 / (1.0 + (-(score as f32) / 400.0).exp());
+                    let outcome_0_1 = (outcome as f32) * 0.5 + 0.5;
+                    t_s[b] = (1.0 - blend) * score_0_1 + blend * outcome_0_1;
                 }
-
-                let score_0_1 = 1.0 / (1.0 + (-(score as f32) / 400.0).exp());
-                let outcome_0_1 = (outcome as f32) * 0.5 + 0.5;
-
-                let blend = (1.0-blend) * score_0_1 + blend * outcome_0_1;
-
-                targets.push(blend);
             }
 
             Some((
-                white_features,
-                white_indices,
-                black_features,
-                black_indices,
-                targets
+                wf_arr.unbind(),
+                wi_arr.unbind(),
+                bf_arr.unbind(),
+                bi_arr.unbind(),
+                t_arr.unbind(),
             ))
         }
     }
