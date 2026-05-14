@@ -1,6 +1,6 @@
 # Limerikk
 
-A modern chess engine written in C++20 with UCI protocol support, SPSA parameter tuning, self-trained NNUE and comprehensive testing. On Lichess as [BlunderfishEngine](https://lichess.org/@/BlunderfishEngine).
+A modern chess engine written in C++20 with UCI protocol support, SPSA parameter tuning, self-trained NNUE and comprehensive testing. On Lichess as [BlunderfishEngine](https://lichess.org/@/BlunderfishEngine). Play it in your browser at [rikki-wallis.github.io/Limerikk](https://rikki-wallis.github.io/Limerikk).
 
 ## Features
 
@@ -57,6 +57,7 @@ This builds the following targets:
 | `spsa` | SPSA parameter tuning via self-play |
 | `datagen` | Position-label generator for training NNUE |
 | `precompute_tables` | Magic bitboard table generator (runs at build time) |
+| `wasm` | WebAssembly build for browser use |
 
 Tests are built automatically and can be run with:
 
@@ -74,6 +75,31 @@ The test suite uses [Catch2](https://github.com/catchorg/Catch2) and covers:
 - **Eval** — incremental evaluation function output verification
 - **Best move** — search result correctness
 - **Misc** — chess rules and utility functions
+
+## WebAssembly
+
+Limerikk can be compiled to WebAssembly and run directly in the browser. The live version is at [rikki-wallis.github.io/Limerikk](https://rikki-wallis.github.io/Limerikk).
+
+To build the WASM target yourself, first do a native build to populate the `generated/` directory (the WASM toolchain cannot run the `precompute_tables` and `bin_to_header` meta-programs):
+
+```bash
+mkdir build && cd build
+cmake .. -G Ninja && ninja
+cd ..
+```
+
+Then install [Emscripten](https://emscripten.org/docs/getting_started/downloads.html) and run:
+
+```bash
+source /path/to/emsdk/emsdk_env.sh
+cd wasm && ./build.sh
+```
+
+The script configures and builds via `emcmake`/`emmake` and copies `limerikk_wasm.js` and `limerikk_wasm.wasm` to the repo root alongside `index.html`. To test locally:
+
+```bash
+python3 -m http.server 8080
+```
 
 ## SPSA Tuning
 
