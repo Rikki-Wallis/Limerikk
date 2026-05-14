@@ -1,38 +1,16 @@
 from model import *
 
 import time
-import multiprocessing
+import numpy as np
+from concurrent.futures import ThreadPoolExecutor
 
-from torch.utils.data import DataLoader
+import dataloader
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-#device = "cpu"
-
-total = os.path.getsize("aggregate.bin") // RECORD_SIZE
-#total = 200
-split = int(total * 0.9)
-
-train = NNUEDataset("aggregate.bin", 0, split)
-val   = NNUEDataset("aggregate.bin", split, total)
-
-import multiprocessing
 
 torch.multiprocessing.set_sharing_strategy('file_system')
 
-print(f"Training on {len(train)} dataset samples")
-
 batch_size = 16384
-
-from torch.utils.cpp_extension import load
-ext = load(name="data_loader_ext", sources=["data_loader.cpp"], extra_cflags=['-O3'], verbose=True)
-
-CUR_BLEND = multiprocessing.Value('f', 0.5)
-
-def collate_fn(batch):
-    return ext.collate_batch(batch, CUR_BLEND.value)
-
-train_loader = DataLoader(train, batch_size=batch_size, shuffle=False, num_workers=12,persistent_workers=True,collate_fn=collate_fn, pin_memory=True)
-val_loader = DataLoader(val, batch_size=batch_size, num_workers=12,persistent_workers=True,collate_fn=collate_fn)
 
 model = NNUE()
 model = torch.compile(model)
@@ -45,71 +23,58 @@ optimizer = torch.optim.AdamW(model.parameters(), lr=4e-3)
 
 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
     optimizer,
-    T_max=num_epochs,        # total epochs
-    eta_min=3e-4     # final LR
+    T_max=num_epochs,
+    eta_min=3e-4
 )
 
-criterion = nn.MSELoss() 
+criterion = nn.MSELoss()
 
 model.train()
 
 start_blend = 0.0
 end_blend = 0.5
 
-start = time.perf_counter()
-
 def lerp(a, b, t):
     return (1-t)*a + t*b
 
 for epoch in range(num_epochs):
-    train_loss = 0
+    loader = dataloader.Dataloader("aggregate.bin")
+    CUR_BLEND = lerp(start_blend, end_blend, epoch/(num_epochs-1))
 
-    CUR_BLEND.value = lerp(start_blend, end_blend, epoch/(num_epochs-1))
+    start = time.perf_counter()
 
-    for i, (white_features, white_indices, black_features, black_indices, target) in enumerate(train_loader):
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(loader.get_batch, batch_size, CUR_BLEND)
 
-        target = target.to(device)
-        white_features = white_features.to(device)
-        white_indices  = white_indices.to(device)
-        black_features = black_features.to(device)
-        black_indices  = black_indices.to(device)
+        for i in range(10000000000000):
+            result = future.result()
+            if result is None:
+                break
 
-        optimizer.zero_grad()
+            future = executor.submit(loader.get_batch, batch_size, CUR_BLEND)
 
-        with torch.amp.autocast("cuda", dtype=torch.bfloat16):
-            output = model(white_features, white_indices, black_features, black_indices)
-            loss = criterion(output, target.float())
+            white_features, white_indices, black_features, black_indices, target = result
 
-        loss.backward()
-        optimizer.step()
-        scheduler.step()
+            target         = torch.from_numpy(np.array(target,         dtype=np.float32)).to(device, non_blocking=True)
+            white_features = torch.from_numpy(np.array(white_features, dtype=np.int64  )).to(device, non_blocking=True)
+            white_indices  = torch.from_numpy(np.array(white_indices,  dtype=np.int64  )).to(device, non_blocking=True)
+            black_features = torch.from_numpy(np.array(black_features, dtype=np.int64  )).to(device, non_blocking=True)
+            black_indices  = torch.from_numpy(np.array(black_indices,  dtype=np.int64  )).to(device, non_blocking=True)
 
-        train_loss += loss.item()
+            optimizer.zero_grad(set_to_none=True)
 
-        if i % 20 == 0:
-            elapsed = time.perf_counter() - start
-            pps = batch_size * 20 / elapsed
-            print(f"Batch {i+1}: {pps} pps (loss={loss.item()})")
-            start = time.perf_counter()
+            with torch.amp.autocast("cuda", dtype=torch.bfloat16):
+                output = model(white_features, white_indices, black_features, black_indices)
+                loss = criterion(output, target)
 
-    train_loss /= len(train_loader)
+            loss.backward()
+            optimizer.step()
 
-    model.eval()
-    with torch.no_grad():
-        val_loss = 0
+            if i % 20 == 0:
+                elapsed = time.perf_counter() - start
+                pps = batch_size * 20 / elapsed
+                print(f"Batch {i+1}: {pps:.0f} pps (loss={loss.item():.6f})")
+                start = time.perf_counter()
 
-        for wf, wi, bf, bi, tv in val_loader:
-            tv = tv.to(device)
-            wf = wf.to(device)
-            wi = wi.to(device)
-            bf = bf.to(device)
-            bi = bi.to(device)
-
-            val_loss += criterion(model(wf, wi, bf, bi), tv.float()).item()
-
-        val_loss /= len(val_loader)
-
-    print(f"Epoch {epoch+1} train: {train_loss:.6f} val: {val_loss:.6f} (wdl blend: {CUR_BLEND.value})")
-    model.train()
-
-    torch.save(model.state_dict(), f"model_epoch{epoch+1}_val{val_loss:.6f}.pt")
+    scheduler.step()
+    torch.save(model.state_dict(), f"checkpoints/model_epoch{epoch+1}.pt")

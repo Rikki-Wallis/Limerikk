@@ -1,0 +1,15 @@
+[package]
+name = "dataloader"
+version = "0.1.0"
+edition = "2024"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "dataloader"
+crate-type = ["cdylib"]
+
+[dependencies]
+byteorder = "1.5.0"
+pyo3 = "0.28.3"
+rand = "0.10.1"
+rayon = "1"
