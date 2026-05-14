@@ -476,6 +476,7 @@ function pieceImg(color, type) {
   return img;
 }
 
+
 // ── Board state (chess.js is source of truth) ───────────────────────────────
 
 let game = new Chess();
@@ -511,7 +512,21 @@ function updateNavButtons() {
 }
 
 function goToView(idx) {
-  const total = game.history().length;
+  const history = game.history({ verbose: true });
+  const total = history.length;
+  const current = viewIndex === null ? total : viewIndex;
+
+  let animMove = null;
+  let animCapture = false;
+  if (idx > current && current < total) {
+    const m = history[current];
+    if (m) { animMove = { from: m.from, to: m.to }; animCapture = !!m.captured; }
+  } else if (idx < current && current > 0) {
+    const m = history[current - 1];
+    if (m) { animMove = { from: m.to, to: m.from }; animCapture = !!m.captured; }
+  }
+
+
   if (idx >= total) {
     viewIndex = null;
     updateEvalBar(lastEvalCp, lastEvalMate);
@@ -521,7 +536,7 @@ function goToView(idx) {
     updateEvalBar(ev.cp, ev.mateVal);
   }
   selectedAlg = null; legalTargets = new Set();
-  renderBoard();
+  renderBoard(animMove);
 }
 
 // Convert algebraic to our render index (0=a1)
@@ -529,9 +544,17 @@ function algToIdx(alg) {
   return ('abcdefgh'.indexOf(alg[0])) + (parseInt(alg[1]) - 1) * 8;
 }
 
-function renderBoard() {
-  const board = document.getElementById('board');
-  board.innerHTML = '';
+function renderBoard(animMove) {
+  const boardEl = document.getElementById('board');
+
+  let fromRect = null;
+  if (animMove) {
+    const fromSq = boardEl.querySelector(`[data-sq="${animMove.from}"]`);
+    if (fromSq) fromRect = fromSq.getBoundingClientRect();
+  }
+
+  boardEl.innerHTML = '';
+  const board = boardEl;
   const { board: b, viewLastMove } = getViewState();
   const reviewing = viewIndex !== null;
 
@@ -571,6 +594,32 @@ function renderBoard() {
     div.addEventListener('click', () => onSquareClick(alg));
     board.appendChild(div);
   }
+
+  if (animMove && fromRect) {
+    const toSq = boardEl.querySelector(`[data-sq="${animMove.to}"]`);
+    if (toSq) {
+      const toRect = toSq.getBoundingClientRect();
+      const dx = fromRect.left - toRect.left;
+      const dy = fromRect.top - toRect.top;
+      const piece = toSq.querySelector('img.piece');
+      if (piece && (dx !== 0 || dy !== 0)) {
+        toSq.style.zIndex = '10';
+        piece.style.transition = 'none';
+        piece.style.transform = `translate(${dx}px, ${dy}px)`;
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            piece.style.transition = 'transform 0.05s ease-out';
+            piece.style.transform = '';
+            piece.addEventListener('transitionend', () => {
+              toSq.style.zIndex = '';
+              piece.style.transition = '';
+            }, { once: true });
+          });
+        });
+      }
+    }
+  }
+
   updateNavButtons();
 }
 
@@ -651,9 +700,11 @@ function onSquareClick(alg) {
   viewIndex = null;
   lastMove = { from: selectedAlg, to: alg };
   selectedAlg = null; legalTargets = new Set();
-  renderBoard();
+  renderBoard(lastMove);
   sendPositionToEngine();
-  checkGameOver() || (game.turn() !== playerColor && triggerEngineMove());
+  if (!checkGameOver() && game.turn() !== playerColor) {
+    setTimeout(triggerEngineMove, 100);
+  }
 }
 
 function sendPositionToEngine() {
@@ -730,7 +781,7 @@ function onEngineOutput(line) {
     if (result) {
       viewIndex = null;
       lastMove = { from, to };
-      renderBoard();
+      renderBoard(lastMove);
       sendPositionToEngine();
       checkGameOver() || setStatus(`Your turn (${playerColor === 'w' ? 'White' : 'Black'})`);
     }
