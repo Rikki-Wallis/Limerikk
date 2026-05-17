@@ -109,8 +109,8 @@ static float forward_accumulator(int16_t* RESTRICT accumulator) {
             __m256i act = _mm256_load_si256((const __m256i*)&a0[j]);      // uint8
             __m256i w   = _mm256_load_si256((const __m256i*)&nnue_w1[i][j]); // int8
 
-            __m256i prod = _mm256_maddubs_epi16(act, w);  // uint8*int8 → int16 (saturating), 32 pairs
-            __m256i wide = _mm256_madd_epi16(prod, ones); // int16*1 → int32, 16 pairs summed
+            __m256i prod = _mm256_maddubs_epi16(act, w);  // uint8*int8 -> int16 (saturating), 32 pairs
+            __m256i wide = _mm256_madd_epi16(prod, ones); // int16*1 -> int32, 16 pairs summed
             sum = _mm256_add_epi32(sum, wide);
         }
 
