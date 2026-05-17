@@ -5,6 +5,8 @@
 
 #ifdef __AVX2__
 #include <immintrin.h>
+#elif defined(__ARM_FEATURE_MATMUL_INT8)
+#include <arm_neon.h>
 #else
 //#error "No intrinsics supported for NNUE"
 #endif
@@ -118,6 +120,16 @@ static float forward_accumulator(int16_t* RESTRICT accumulator) {
         s = _mm_add_epi32(s, _mm_shuffle_epi32(s, _MM_SHUFFLE(1,0,3,2)));
         s = _mm_add_epi32(s, _mm_shuffle_epi32(s, _MM_SHUFFLE(2,3,0,1)));
         int32_t value = _mm_cvtsi128_si32(s) + nnue_b1[i];
+#elif defined(__ARM_FEATURE_MATMUL_INT8)
+        int32x4_t sum = vdupq_n_s32(0);
+
+        for (size_t j = 0; j < std::size(a0); j += 16) {
+            uint8x16_t act = vld1q_u8(&a0[j]);
+            int8x16_t  w   = vld1q_s8(&nnue_w1[i][j]);
+            sum = vusdotq_s32(sum, act, w);
+        }
+
+        int32_t value = vaddvq_s32(sum) + nnue_b1[i];
 #else
         int32_t value = nnue_b1[i];
 
