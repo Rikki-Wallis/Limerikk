@@ -299,8 +299,7 @@ struct Position {
 
     bool is_king_square_attacked(int side, int square) const;
 
-    int lowest_value_defender(int defender_side, int sq, uint64_t occupancy) const;
-    int see(Move m) const;
+    int lowest_value_attacker(int sq, int side, uint64_t occupancy) const;
 
     void filter_moves(MoveList& moves);
 

@@ -33,6 +33,49 @@ struct MoveScores {
     int32_t data[256];
 };
 
+static int32_t see(const Position& pos, int sq, int side, Piece cur_piece, uint64_t occupancy) {
+    int32_t value = 0;
+
+    int attck_sq = pos.lowest_value_attacker(sq, side, occupancy);
+
+    if (attck_sq != NULL_SQUARE) {
+        Piece piece = Piece(pos.piece_at[attck_sq]);
+
+        if (piece == PIECE_KING) {
+            int x = pos.lowest_value_attacker(sq, opponent(side), occupancy ^ sq_to_bb(attck_sq));
+
+            if (x != NULL_SQUARE) {
+                return 0;
+            }
+        }
+
+        value = std::max(piece_value_table[cur_piece] - see(pos, sq, opponent(side), piece, occupancy ^ sq_to_bb(attck_sq)), 0);
+    }
+
+    return value;
+}
+
+static int32_t capture_see(const Position& pos, Move mv) {
+    Piece captured = move_captured_piece(mv);
+
+    if (captured == PIECE_NONE) {
+        return 0;
+    }
+
+    uint64_t occ = pos.all_pieces();
+
+    occ ^= sq_to_bb(move_from(mv));
+    occ ^= sq_to_bb(move_captured_square(mv));
+    occ ^= sq_to_bb(move_to(mv));
+
+    int sq = move_to(mv);
+
+    Piece initial_piece = Piece(pos.piece_at[move_from(mv)]);
+    int32_t value = piece_value_table[captured] - see(pos, sq, opponent(pos.to_move), initial_piece, occ);
+
+    return value;
+}
+
 static int32_t score_quiet(Position& pos, Move mv) {
     (void)pos;
     (void)mv;
@@ -111,7 +154,7 @@ static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, 
     for (int move_index = 0; move_index < moves.count; ++move_index) {
         Move mv = select_move(moves, move_scores, move_index);
 
-        if (!pos.is_checked[pos.to_move] && pos.see(mv) < 0) {
+        if (!pos.is_checked[pos.to_move] && capture_see(pos, mv) < 0) {
             continue; // skip bad captures
         }
 
