@@ -200,10 +200,10 @@ public:
         _start = Clock::now();
     }
 
-    virtual bool should_exit(Position& pos) const override {
+    virtual bool should_exit(int node_count) const override {
         int64_t elapsed_microseconds = std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - _start).count();
         double elapsed_s = double(elapsed_microseconds)/1000000.0;
-        return pos.node_count >= _nodes || elapsed_s >= _seconds;
+        return node_count >= _nodes || elapsed_s >= _seconds;
     }
 
 private:
@@ -262,7 +262,7 @@ int main() {
             
             thread = std::thread([&position, depth, &should_stop, time_s, node_budget](){
                 UCIBudgeter budgeter(node_budget, time_s);
-                Move move = position.think(depth, should_stop, &budgeter, {}, true);
+                Move move = position.think(depth, should_stop, &budgeter, true);
                 std::cout << "bestmove " << to_uci_move(move) << "\n";
             });
         }

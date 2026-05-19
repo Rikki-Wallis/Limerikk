@@ -64,7 +64,7 @@ static std::pair<GameResult, BinpackGame> run_match() {
                 NodeBudgeter budgeter(NODE_BUDGET);
 
                 int64_t score= 0;
-                Move mv= pos.best_move(20, should_stop, &budgeter, {}, false, &score);
+                Move mv= pos.best_move(20, should_stop, &budgeter, false, &score);
 
                 if (pos.to_move == BLACK) {
                     score *= -1;
