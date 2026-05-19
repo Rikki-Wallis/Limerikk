@@ -105,6 +105,8 @@ Move Position::best_move(int depth, std::atomic<bool>& should_stop, Budgeter* bu
 
     budgeter->init();
 
+    TimePoint start = Clock::now();
+
     SearchContext s = {
         .node_count = 0,
         .budgeter = budgeter,
@@ -114,10 +116,29 @@ Move Position::best_move(int depth, std::atomic<bool>& should_stop, Budgeter* bu
     Move best_move = NULL_MOVE;
     
     for (int d = 1; d < depth; ++d) {
-        Move mv = ::best_move(*this, s, d).first;
+        auto [mv, score] = ::best_move(*this, s, d);
 
         if (s.exited) {
             break;
+        }
+
+        if (enable_uci_info) {
+            std::string score_info;
+
+            if (std::abs(score) > (MATE_SCORE - 1000)) {
+                int mate_in = MATE_SCORE - std::abs(score);
+                score_info = std::format("mate {}{}", score < 0 ? "-" : "", mate_in);
+            }
+            else {
+                score_info = std::format("cp {}", score);
+            }
+
+            long long ms = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start).count();
+            auto seconds = double(std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - start).count()) / 1000000;
+
+            int nps = int(float(s.node_count) / float(seconds));
+
+            print("info depth {} time {} nodes {} nps {} score {} pv {}\n", d, ms, s.node_count, nps, score_info, to_uci_move(mv));
         }
 
         best_move = mv;
