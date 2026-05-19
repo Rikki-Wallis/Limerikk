@@ -42,7 +42,7 @@ static int32_t score_quiet(Position& pos, Move mv) {
 static int32_t score_capture(Position& pos, Move mv) {
     Piece captured = move_captured_piece(mv);
     Piece moving = Piece(pos.piece_at[move_from(mv)]);
-    return piece_value_table[captured] - moving;
+    return piece_value_table[captured]*100 - moving;
 }
 
 static MoveScores score_moves(Position& pos, const MoveList& moves) {
@@ -110,6 +110,11 @@ static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, 
 
     for (int move_index = 0; move_index < moves.count; ++move_index) {
         Move mv = select_move(moves, move_scores, move_index);
+
+        if (!pos.is_checked[pos.to_move] && pos.see(mv) < 0) {
+            continue; // skip bad captures
+        }
+
         pos.make_move(mv);
 
         int32_t score = -qsearch(pos, s, ply+1, -beta, -alpha);
@@ -196,14 +201,21 @@ static std::pair<Move, int32_t> best_move(Position& pos, SearchContext& s, int d
     int32_t best_score = -INF_SCORE;
     Move best_move = NULL_MOVE;
 
+    int32_t alpha = -INF_SCORE;
+    int32_t beta  = INF_SCORE;
+
     for (Move mv : moves) {
         pos.make_move(mv);
 
-        int32_t score = -search(pos, s, depth-1, 1, -INF_SCORE, INF_SCORE);
+        int32_t score = -search(pos, s, depth-1, 1, -beta, -alpha);
 
         if (score > best_score) {
             best_score = score;
             best_move = mv;
+        }
+
+        if (score > alpha) {
+            alpha = score;
         }
 
         pos.unmake_move();
