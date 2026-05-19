@@ -170,7 +170,7 @@ static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, 
             alpha = score;
         }
 
-        if (alpha > beta) {
+        if (alpha >= beta) {
             pos.unmake_move();
             return best_score;
         }
@@ -220,7 +220,7 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
             alpha = score;
         }
 
-        if (alpha > beta) {
+        if (alpha >= beta) {
             pos.unmake_move();
             return best_score;
         }
