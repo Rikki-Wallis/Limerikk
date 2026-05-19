@@ -6,21 +6,124 @@
 
 #include "limerikk.h"
 
+struct SearchContext {
+    int node_count;
+    Budgeter* budgeter;
+    std::atomic<bool>& should_stop;
+    bool exited;
+
+    bool exit_on_node() {
+        if (should_stop) {
+            exited = true;
+        }
+
+        node_count++;
+
+        if ((node_count & 0xfff) == 0) {
+            if (budgeter->should_exit(node_count)) {
+                exited = true;
+            }
+        }
+
+        return exited;
+    }
+};
+
+static int32_t search(Position& pos, SearchContext& s, int depth, int ply) {
+    if (s.exit_on_node()) {
+        return 0;
+    }
+
+    MoveList moves = pos.generate_moves();
+    pos.filter_moves(moves);
+
+    if (moves.count == 0) {
+        if (pos.is_checked[pos.to_move]) {
+            return -MATE_SCORE + ply;
+        }
+        else {
+            return 0;
+        }
+    }
+
+    if (depth == 0) {
+        return pos.signed_eval();
+    }
+
+    int32_t best_score = -INF_SCORE;
+
+    for (Move mv : moves) {
+        pos.make_move(mv);
+
+        int32_t score = -search(pos, s, depth-1, ply+1);
+
+        if (score > best_score) {
+            best_score = score;
+        }
+
+        pos.unmake_move();
+    }
+
+    return best_score;
+}
+
+static std::pair<Move, int32_t> best_move(Position& pos, SearchContext& s, int depth) {
+    assert(depth > 0);
+
+    if (s.exit_on_node()) {
+        return {NULL_MOVE, -INF_SCORE};
+    }
+
+    MoveList moves = pos.generate_moves();
+    pos.filter_moves(moves);
+
+    int32_t best_score = -INF_SCORE;
+    Move best_move = NULL_MOVE;
+
+    for (Move mv : moves) {
+        pos.make_move(mv);
+
+        int32_t score = -search(pos, s, depth-1, 1);
+
+        if (score > best_score) {
+            best_score = score;
+            best_move = mv;
+        }
+
+        pos.unmake_move();
+    }
+
+    return {
+        best_move,
+        best_score
+    };
+}
+
 Move Position::best_move(int depth, std::atomic<bool>& should_stop, Budgeter* budgeter, bool enable_uci_info, int64_t* score_out) {
-    (void)depth;
-    (void)should_stop;
-    (void)budgeter;
     (void)enable_uci_info;
     (void)score_out;
 
-    MoveList moves = generate_moves();
-    filter_moves(moves);
+    budgeter->init();
 
-    if (moves.count == 0) {
-        return NULL_MOVE;
+    SearchContext s = {
+        .node_count = 0,
+        .budgeter = budgeter,
+        .should_stop = should_stop,
+    };
+
+    Move best_move = NULL_MOVE;
+    
+    for (int d = 1; d < depth; ++d) {
+        Move mv = ::best_move(*this, s, d).first;
+
+        if (s.exited) {
+            break;
+        }
+
+        best_move = mv;
     }
 
-    return moves.data[moves.count/2];
+    return best_move;
 }
 
 Move Position::think(int depth, std::atomic<bool>& should_stop, Budgeter* budgeter, bool enable_uci_info, int64_t* score_out) {

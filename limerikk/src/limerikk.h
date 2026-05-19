@@ -28,8 +28,8 @@ using TimePoint = std::chrono::time_point<Clock>;
 
 #define MAX_DEPTH 255
 
-constexpr int64_t INF        = 400000000;
-constexpr int64_t MATE_SCORE = 32000; // just shy of int16 bounds
+constexpr int32_t INF_SCORE  = 400000000;
+constexpr int32_t MATE_SCORE = 32000; // just shy of int16 bounds
 
 static constexpr uint64_t RANK_1 = 0x00000000000000ff;
 static constexpr uint64_t RANK_2 = 0x000000000000ff00;
@@ -127,7 +127,7 @@ struct Undo {
     uint32_t flags;
     Move move;
     int en_passant_sq;
-    int64_t incremental_eval;
+    int32_t incremental_eval;
     uint64_t zobrist;
     bool is_checked[2];
     int half_move_clock;
@@ -260,7 +260,7 @@ struct Position {
 #ifdef USE_NNUE
     std::vector<Accumulator> accumulator_stack;
 #endif
-    int64_t incr_eval;
+    int32_t incr_eval;
 
     Position()
         : to_move(WHITE), en_passant_sq(NULL_SQUARE), flags(0), half_move_clock(0)
@@ -306,10 +306,10 @@ struct Position {
 
     void verify_integrity() const;
 
-    int64_t compute_eval() const;
-    int64_t nnue_eval() const;
+    int32_t compute_eval() const;
+    int32_t nnue_eval() const;
 
-    int64_t signed_eval();
+    int32_t signed_eval();
 
     // @note if no castle, make rook_from == rook_ro
     void update_eval(Piece captured_piece, int captured_pos, Piece moving_piece_start, Piece moving_piece_end, int move_from, int move_to, int rook_from, int rook_to, int side, int sign=1);

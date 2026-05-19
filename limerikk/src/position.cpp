@@ -12,7 +12,6 @@ enum SideFlags {
     SIDE_FLAG_CAN_CASTLE_QUEENSIDE = (1 << 1),
 };
 
-
 uint64_t Side::all() const {
     return bb[PIECE_PAWN] | bb[PIECE_ROOK] | bb[PIECE_KNIGHT] | bb[PIECE_BISHOP] | bb[PIECE_QUEEN] | bb[PIECE_KING];
 }

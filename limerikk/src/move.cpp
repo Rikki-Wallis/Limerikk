@@ -693,7 +693,7 @@ void Position::update_en_passant_sq(int sq) {
 void Position::make_move(Move move) {
     // Update eval
     uint64_t initial_zobrist = zobrist;
-    int64_t initial_eval = incr_eval;
+    int32_t initial_eval = incr_eval;
     int initial_half_move_clock = half_move_clock;
 
     // First, check for a capture and remove the piece

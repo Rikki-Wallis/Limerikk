@@ -180,7 +180,7 @@ int32_t eg_unsigned_pst_value(Piece piece, int square, int side) {
     return EG_PST[piece][square ^ (bool_to_mask<int>(side==BLACK) & 56)];
 }
 
-int64_t Position::compute_eval() const {
+int32_t Position::compute_eval() const {
     #ifdef USE_NNUE
         return nnue_eval();
     #else
@@ -468,8 +468,8 @@ int64_t Position::mobility(int colour) const {
 }
 
 
-int64_t Position::signed_eval() {
-    int64_t sign = to_move == WHITE ? 1 : -1;
+int32_t Position::signed_eval() {
+    int32_t sign = to_move == WHITE ? 1 : -1;
     return incr_eval * sign;
 }
  
