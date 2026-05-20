@@ -238,6 +238,10 @@ static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, 
         best_score = pos.signed_eval(); // we can "stand-pat" because we aren't in check
     }
 
+    if (best_score >= beta) {
+        return best_score;
+    }
+
     pos.filter_moves(moves);
 
     if (moves.count == 0 && pos.is_checked[pos.to_move]) {
