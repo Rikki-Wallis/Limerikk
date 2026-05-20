@@ -7,10 +7,12 @@
 
 #include "limerikk.h"
 
-constexpr int32_t GOOD_CAPTURE_SCORE = 100000;
-constexpr int32_t PROMOTION_SCORE    = 100000;
-constexpr int32_t KILLER_SCORE       =  50000;
-constexpr int32_t QUIET_SCORE        =  10000;
+constexpr int32_t GOOD_CAPTURE_SCORE    = 200000;
+constexpr int32_t PROMOTION_SCORE       = 200000;
+constexpr int32_t NEUTRAL_CAPTURE_SCORE = 100000;
+constexpr int32_t KILLER_SCORE          = 50000;
+constexpr int32_t QUIET_SCORE           = 10000;
+constexpr int32_t BAD_CAPTURE_SCORE     = 0;
 
 struct SearchContext {
     int node_count = 0;
@@ -134,7 +136,19 @@ static MoveScores score_moves(Position& pos, SearchContext& s, const MoveList& m
         }
         else {
             int32_t see_score = capture_see(pos, mv);
-            int32_t base = see_score >= 0 ? (promotion ? PROMOTION_SCORE : GOOD_CAPTURE_SCORE) : 0;
+
+            int32_t base = 0;
+
+            if (see_score > 0) {
+                base = promotion ? PROMOTION_SCORE : GOOD_CAPTURE_SCORE;
+            }
+            else if (see_score == 0) {
+                base = NEUTRAL_CAPTURE_SCORE;
+            }
+            else {
+                base = BAD_CAPTURE_SCORE;
+            }
+
             x = score_capture(pos, mv) + base;
         }
 
