@@ -7,12 +7,21 @@
 
 #include "limerikk.h"
 
+constexpr int32_t HASH_MOVE_SCORE       = 500000;
 constexpr int32_t GOOD_CAPTURE_SCORE    = 200000;
 constexpr int32_t PROMOTION_SCORE       = 200000;
 constexpr int32_t NEUTRAL_CAPTURE_SCORE = 100000;
 constexpr int32_t KILLER_SCORE          = 50000;
 constexpr int32_t QUIET_SCORE           = 10000;
 constexpr int32_t BAD_CAPTURE_SCORE     = 0;
+
+struct TTEntry {
+    uint64_t hash;
+    Move best_move;
+};
+
+constexpr size_t TT_SIZE = (1 << 20);
+constexpr uint64_t TT_MASK = TT_SIZE - 1;
 
 struct SearchContext {
     int node_count = 0;
@@ -21,12 +30,16 @@ struct SearchContext {
     int beta_cutoff_index_sum = 0;
     int beta_cutoff_count = 0;
 
+    int tt_attempts = 0;
+    int tt_hits = 0;
+
     Budgeter* budgeter;
     std::atomic<bool>& should_stop;
 
     bool exited = false;
 
     Move killers[MAX_DEPTH][2] = {};
+    TTEntry tt[TT_SIZE]{};
 
     SearchContext(Budgeter* budgeter, std::atomic<bool>& should_stop)
         : budgeter(budgeter), should_stop(should_stop)
@@ -54,6 +67,17 @@ struct SearchContext {
         }
 
         return exited;
+    }
+
+    TTEntry& tt_query(uint64_t hash) {
+        size_t index = hash & TT_MASK;
+
+        TTEntry& e = tt[index];
+
+        tt_attempts++;
+        tt_hits += e.hash == hash;
+
+        return e;
     }
 };
 
@@ -116,7 +140,7 @@ static int32_t score_capture(Position& pos, Move mv) {
     return piece_value_table[captured] - moving;
 }
 
-static MoveScores score_moves(Position& pos, SearchContext& s, const MoveList& moves, int ply) {
+static MoveScores score_moves(Position& pos, SearchContext& s, const MoveList& moves, int ply, Move hash_move) {
     MoveScores scores;
 
     for (int i = 0; i < moves.count; ++i) {
@@ -127,7 +151,10 @@ static MoveScores score_moves(Position& pos, SearchContext& s, const MoveList& m
 
         int32_t x;
 
-        if (mv == s.killers[ply][0] || mv == s.killers[ply][1]) {
+        if (mv == hash_move) {
+            x = HASH_MOVE_SCORE;
+        }
+        else if (mv == s.killers[ply][0] || mv == s.killers[ply][1]) {
             x = KILLER_SCORE;
         }
         else if (quiet) {
@@ -208,7 +235,16 @@ static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, 
         return -MATE_SCORE + ply;
     }
 
-    MoveScores move_scores = score_moves(pos, s, moves, ply);
+    TTEntry& tt_entry = s.tt_query(pos.zobrist);
+
+    Move hash_move = NULL_MOVE;
+
+    if (tt_entry.hash == pos.zobrist) {
+        hash_move = tt_entry.best_move;
+    }
+
+    MoveScores move_scores = score_moves(pos, s, moves, ply, hash_move);
+    Move best_move = NULL_MOVE;
 
     for (int move_index = 0; move_index < moves.count; ++move_index) {
         Move mv = select_move(moves, move_scores, move_index);
@@ -225,6 +261,7 @@ static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, 
 
         if (score > best_score) {
             best_score = score;
+            best_move = mv;
         }
 
         if (score > alpha) {
@@ -246,10 +283,17 @@ static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, 
         pos.unmake_move();
     }
 
+    tt_entry.hash = pos.zobrist;
+    tt_entry.best_move = best_move;
+
     return best_score;
 }
 
-static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32_t alpha, int32_t beta) {
+static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32_t alpha, int32_t beta, Move* best_move_out = nullptr) {
+    if (best_move_out) {
+        *best_move_out = NULL_MOVE;
+    }
+
     if (s.exit_on_node()) {
         return 0;
     }
@@ -278,9 +322,18 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
         return qsearch(pos, s, ply, alpha, beta);
     }
 
-    MoveScores move_scores = score_moves(pos, s, moves, ply);
+    TTEntry& tt_entry = s.tt_query(pos.zobrist);
+
+    Move hash_move = NULL_MOVE;
+
+    if (tt_entry.hash == pos.zobrist) {
+        hash_move = tt_entry.best_move;
+    }
+
+    MoveScores move_scores = score_moves(pos, s, moves, ply, hash_move);
 
     int32_t best_score = -INF_SCORE;
+    Move best_move = NULL_MOVE;
 
     for (int move_index = 0; move_index < moves.count; ++move_index) {
         Move mv = select_move(moves, move_scores, move_index);
@@ -292,6 +345,7 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
 
         if (score > best_score) {
             best_score = score;
+            best_move = mv;
         }
 
         if (score > alpha) {
@@ -313,46 +367,14 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
         pos.unmake_move();
     }
 
+    tt_entry.hash = pos.zobrist;
+    tt_entry.best_move = best_move;
+
+    if (best_move_out) {
+        *best_move_out = best_move;
+    }
+
     return best_score;
-}
-
-static std::pair<Move, int32_t> best_move(Position& pos, SearchContext& s, int depth) {
-    assert(depth > 0);
-
-    if (s.exit_on_node()) {
-        return {NULL_MOVE, -INF_SCORE};
-    }
-
-    MoveList moves = pos.generate_moves();
-    pos.filter_moves(moves);
-
-    int32_t best_score = -INF_SCORE;
-    Move best_move = NULL_MOVE;
-
-    int32_t alpha = -INF_SCORE;
-    int32_t beta  = INF_SCORE;
-
-    for (Move mv : moves) {
-        pos.make_move(mv);
-
-        int32_t score = -search(pos, s, depth-1, 1, -beta, -alpha);
-
-        if (score > best_score) {
-            best_score = score;
-            best_move = mv;
-        }
-
-        if (score > alpha) {
-            alpha = score;
-        }
-
-        pos.unmake_move();
-    }
-
-    return {
-        best_move,
-        best_score
-    };
 }
 
 Move Position::best_move(int depth, std::atomic<bool>& should_stop, Budgeter* budgeter, bool enable_uci_info, int64_t* score_out, SearchStatistics* stats /*optional*/) {
@@ -368,7 +390,8 @@ Move Position::best_move(int depth, std::atomic<bool>& should_stop, Budgeter* bu
     Move best_move = NULL_MOVE;
     
     for (int d = 1; d <= depth; ++d) {
-        auto [mv, score] = ::best_move(*this, *s, d);
+        Move mv;
+        int32_t score = search(*this, *s, d, 0, -INF_SCORE, INF_SCORE, &mv);
 
         if (s->exited) {
             break;
@@ -404,6 +427,7 @@ Move Position::best_move(int depth, std::atomic<bool>& should_stop, Budgeter* bu
         stats->qnodes = s->qnode_count;
         stats->time = float(double(std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - start).count())/1000000.0);
         stats->mean_cutoff_index = float(s->beta_cutoff_index_sum)/float(s->beta_cutoff_count);
+        stats->tt_hit_rate = float(s->tt_hits)/float(s->tt_attempts);
     }
 
     return best_move;

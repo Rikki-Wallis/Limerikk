@@ -247,6 +247,7 @@ struct SearchStatistics {
     int qnodes;
     float time;
     float mean_cutoff_index;
+    float tt_hit_rate;
 };
 
 struct Position {
