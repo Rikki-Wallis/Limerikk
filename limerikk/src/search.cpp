@@ -168,6 +168,14 @@ static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, 
         return 0;
     }
 
+    if (pos.is_threefold_repetition()) {
+        return 0;
+    }
+
+    if (pos.half_move_clock == 100) {
+        return 0;
+    }
+
     MoveList moves;
 
     int32_t best_score = -INF_SCORE;
@@ -229,6 +237,14 @@ static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, 
 
 static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32_t alpha, int32_t beta) {
     if (s.exit_on_node()) {
+        return 0;
+    }
+
+    if (pos.is_threefold_repetition()) {
+        return 0;
+    }
+
+    if (pos.half_move_clock == 100) {
         return 0;
     }
 
