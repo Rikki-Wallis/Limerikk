@@ -3,19 +3,38 @@
 #include <iostream>
 #include <algorithm>
 #include <unordered_set>
+#include <memory>
 
 #include "limerikk.h"
 
-struct SearchContext {
-    int node_count;
-    int qnode_count;
+constexpr int32_t CAPTURE_SCORE = 10000;
+constexpr int32_t KILLER_SCORE  =  5000;
 
-    int beta_cutoff_index_sum;
-    int beta_cutoff_count;
+struct SearchContext {
+    int node_count = 0;
+    int qnode_count = 0;
+
+    int beta_cutoff_index_sum = 0;
+    int beta_cutoff_count = 0;
 
     Budgeter* budgeter;
     std::atomic<bool>& should_stop;
-    bool exited;
+
+    bool exited = false;
+
+    Move killers[MAX_DEPTH][2] = {};
+
+    SearchContext(Budgeter* budgeter, std::atomic<bool>& should_stop)
+        : budgeter(budgeter), should_stop(should_stop)
+    {
+    }
+
+    void register_killer(int ply, Move mv) {
+        if (mv != killers[ply][0] && mv != killers[ply][1]) {
+            killers[ply][0] = killers[ply][1];
+            killers[ply][1] = mv;
+        }
+    }
 
     bool exit_on_node() {
         if (should_stop) {
@@ -90,25 +109,30 @@ static int32_t score_quiet(Position& pos, Move mv) {
 static int32_t score_capture(Position& pos, Move mv) {
     Piece captured = move_captured_piece(mv);
     Piece moving = Piece(pos.piece_at[move_from(mv)]);
-    return piece_value_table[captured]*100 - moving;
+    return piece_value_table[captured] - moving;
 }
 
-static MoveScores score_moves(Position& pos, const MoveList& moves) {
+static MoveScores score_moves(Position& pos, SearchContext& s, const MoveList& moves, int ply) {
     MoveScores scores;
 
     for (int i = 0; i < moves.count; ++i) {
         Move mv = moves.data[i];
 
-        int32_t s;
+        bool quiet = move_captured_piece(mv) == PIECE_NONE;
 
-        if (move_captured_piece(mv) == PIECE_NONE) {
-            s = score_quiet(pos, mv);
+        int32_t x;
+
+        if (mv == s.killers[ply][0] || mv == s.killers[ply][1]) {
+            x = KILLER_SCORE;
+        }
+        else if (quiet) {
+            x = score_quiet(pos, mv);
         }
         else {
-            s = score_capture(pos, mv);
+            x = score_capture(pos, mv) + CAPTURE_SCORE;
         }
 
-        scores.data[i] = s;
+        scores.data[i] = x;
     }
 
     return scores;
@@ -156,10 +180,12 @@ static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, 
         return -MATE_SCORE + ply;
     }
 
-    MoveScores move_scores = score_moves(pos, moves);
+    MoveScores move_scores = score_moves(pos, s, moves, ply);
 
     for (int move_index = 0; move_index < moves.count; ++move_index) {
         Move mv = select_move(moves, move_scores, move_index);
+
+        bool quiet = move_captured_piece(mv) == PIECE_NONE;
 
         if (!pos.is_checked[pos.to_move] && capture_see(pos, mv) < 0) {
             continue; // skip bad captures
@@ -180,6 +206,10 @@ static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, 
         if (alpha >= beta) {
             s.beta_cutoff_index_sum += move_index;
             s.beta_cutoff_count++;
+
+            if (quiet) {
+                s.register_killer(ply, mv);
+            }
 
             pos.unmake_move();
             return best_score;
@@ -212,13 +242,15 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
         return qsearch(pos, s, ply, alpha, beta);
     }
 
-    MoveScores move_scores = score_moves(pos, moves);
+    MoveScores move_scores = score_moves(pos, s, moves, ply);
 
     int32_t best_score = -INF_SCORE;
 
     for (int move_index = 0; move_index < moves.count; ++move_index) {
         Move mv = select_move(moves, move_scores, move_index);
         pos.make_move(mv);
+
+        bool quiet = move_captured_piece(mv) == PIECE_NONE;
 
         int32_t score = -search(pos, s, depth-1, ply+1, -beta, -alpha);
 
@@ -233,6 +265,10 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
         if (alpha >= beta) {
             s.beta_cutoff_index_sum += move_index;
             s.beta_cutoff_count++;
+
+            if (quiet) {
+                s.register_killer(ply, mv);
+            }
 
             pos.unmake_move();
             return best_score;
@@ -291,19 +327,14 @@ Move Position::best_move(int depth, std::atomic<bool>& should_stop, Budgeter* bu
 
     TimePoint start = Clock::now();
 
-    SearchContext s = {
-        .node_count = 0,
-        .budgeter = budgeter,
-        .should_stop = should_stop,
-        .exited = false
-    };
+    auto s = std::make_unique<SearchContext>(budgeter, should_stop);
 
     Move best_move = NULL_MOVE;
     
     for (int d = 1; d <= depth; ++d) {
-        auto [mv, score] = ::best_move(*this, s, d);
+        auto [mv, score] = ::best_move(*this, *s, d);
 
-        if (s.exited) {
+        if (s->exited) {
             break;
         }
 
@@ -322,9 +353,9 @@ Move Position::best_move(int depth, std::atomic<bool>& should_stop, Budgeter* bu
             long long ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - start).count();
             auto seconds = double(std::chrono::duration_cast<std::chrono::microseconds>(now - start).count()) / 1000000;
 
-            int nps = int(float(s.node_count) / float(seconds));
+            int nps = int(float(s->node_count) / float(seconds));
 
-            print("info depth {} time {} nodes {} nps {} score {} pv {}\n", d, ms, s.node_count, nps, score_info, to_uci_move(mv));
+            print("info depth {} time {} nodes {} nps {} score {} pv {}\n", d, ms, s->node_count, nps, score_info, to_uci_move(mv));
         }
 
         best_move = mv;
@@ -333,10 +364,10 @@ Move Position::best_move(int depth, std::atomic<bool>& should_stop, Budgeter* bu
     assert(best_move != NULL_MOVE);
 
     if (stats) {
-        stats->nodes = s.node_count;
-        stats->qnodes = s.qnode_count;
+        stats->nodes = s->node_count;
+        stats->qnodes = s->qnode_count;
         stats->time = float(double(std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - start).count())/1000000.0);
-        stats->mean_cutoff_index = float(s.beta_cutoff_index_sum)/float(s.beta_cutoff_count);
+        stats->mean_cutoff_index = float(s->beta_cutoff_index_sum)/float(s->beta_cutoff_count);
     }
 
     return best_move;
