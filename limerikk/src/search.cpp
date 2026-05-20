@@ -56,8 +56,9 @@ struct SearchContext {
         }
     }
 
-    void register_history(int side, Piece piece, int to, int depth) {
-        history[side][piece][to] += depth * depth;
+    void register_history(int side, Piece piece, int to, int32_t bonus) {
+        int32_t clamped_bonus = std::clamp(bonus, -MAX_HISTORY, MAX_HISTORY);
+        history[side][piece][to] += clamped_bonus - history[side][piece][to] * std::abs(clamped_bonus) / MAX_HISTORY;
     }
 
     bool exit_on_node() {
@@ -345,6 +346,9 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
     int32_t best_score = -INF_SCORE;
     Move best_move = NULL_MOVE;
 
+    Move quiets[256];
+    int quiet_count = 0;
+
     for (int move_index = 0; move_index < moves.count; ++move_index) {
         Move mv = select_move(moves, move_scores, move_index);
 
@@ -354,6 +358,10 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
         pos.make_move(mv);
 
         bool quiet = move_captured_piece(mv) == PIECE_NONE;
+
+        if (quiet) {
+            quiets[quiet_count++] = mv;
+        }
 
         int32_t score = -search(pos, s, depth-1, ply+1, -beta, -alpha);
 
@@ -370,9 +378,15 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
             s.beta_cutoff_index_sum += move_index;
             s.beta_cutoff_count++;
 
+            int hist_bonus = 300 * depth - 250;
+
             if (quiet) {
                 s.register_killer(ply, mv);
-                s.register_history(side, piece, to, depth);
+                s.register_history(side, piece, to, hist_bonus);
+
+                for (int i = quiet_count-2; i >= 0; --i) {
+                    s.register_history(side, piece, to, -hist_bonus);
+                }
             }
 
             pos.unmake_move();
