@@ -11,9 +11,11 @@ constexpr int32_t HASH_MOVE_SCORE       = 500000;
 constexpr int32_t GOOD_CAPTURE_SCORE    = 200000;
 constexpr int32_t PROMOTION_SCORE       = 200000;
 constexpr int32_t NEUTRAL_CAPTURE_SCORE = 100000;
-constexpr int32_t KILLER_SCORE          = 50000;
-constexpr int32_t QUIET_SCORE           = 10000;
-constexpr int32_t BAD_CAPTURE_SCORE     = 0;
+constexpr int32_t KILLER_SCORE          =  50000;
+constexpr int32_t QUIET_SCORE           =  20000;
+constexpr int32_t MAX_HISTORY           =   5000; 
+constexpr int32_t BAD_CAPTURE_SCORE     =      0;
+
 
 struct TTEntry {
     uint64_t hash;
@@ -40,7 +42,7 @@ struct SearchContext {
 
     Move killers[MAX_DEPTH][2] = {};
     TTEntry tt[TT_SIZE]{};
-    int32_t history[NUM_PIECE_TYPES][64] = {};
+    int32_t history[2][NUM_PIECE_TYPES][64] = {};
 
     SearchContext(Budgeter* budgeter, std::atomic<bool>& should_stop)
         : budgeter(budgeter), should_stop(should_stop)
@@ -54,8 +56,8 @@ struct SearchContext {
         }
     }
 
-    void register_history(Piece piece, int to, int depth) {
-        history[piece][to] += depth * depth;
+    void register_history(int side, Piece piece, int to, int depth) {
+        history[side][piece][to] += depth * depth;
     }
 
     bool exit_on_node() {
@@ -135,7 +137,7 @@ static int32_t capture_see(const Position& pos, Move mv) {
 
 static int32_t score_quiet(Position& pos, SearchContext& s, Move mv) {
     Piece piece = Piece(pos.piece_at[move_from(mv)]);
-    return s.history[piece][move_to(mv)];
+    return s.history[pos.to_move][piece][move_to(mv)];
 }
 
 static int32_t score_capture(Position& pos, Move mv) {
@@ -296,6 +298,8 @@ static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, 
 }
 
 static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32_t alpha, int32_t beta, Move* best_move_out = nullptr) {
+    int side = pos.to_move;
+
     if (best_move_out) {
         *best_move_out = NULL_MOVE;
     }
@@ -368,7 +372,7 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
 
             if (quiet) {
                 s.register_killer(ply, mv);
-                s.register_history(piece, to, depth);
+                s.register_history(side, piece, to, depth);
             }
 
             pos.unmake_move();
