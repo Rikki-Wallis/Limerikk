@@ -212,6 +212,8 @@ static Move select_move(MoveList& moves, MoveScores& scores, int index) {
 } 
 
 static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, int32_t beta) {
+    int side = pos.to_move;
+
     s.qnode_count++;
 
     if (s.exit_on_node()) {
@@ -242,12 +244,6 @@ static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, 
         return best_score;
     }
 
-    pos.filter_moves(moves);
-
-    if (moves.count == 0 && pos.is_checked[pos.to_move]) {
-        return -MATE_SCORE + ply;
-    }
-
     TTEntry& tt_entry = s.tt_query(pos.zobrist);
 
     Move hash_move = NULL_MOVE;
@@ -258,6 +254,8 @@ static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, 
 
     MoveScores move_scores = score_moves(pos, s, moves, ply, hash_move);
     Move best_move = NULL_MOVE;
+
+    int legal_move_index = 0;
 
     for (int move_index = 0; move_index < moves.count; ++move_index) {
         Move mv = select_move(moves, move_scores, move_index);
@@ -270,30 +268,38 @@ static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, 
 
         pos.make_move(mv);
 
-        int32_t score = -qsearch(pos, s, ply+1, -beta, -alpha);
+        if (!pos.is_checked[side]) {
+            int32_t score = -qsearch(pos, s, ply+1, -beta, -alpha);
 
-        if (score > best_score) {
-            best_score = score;
-            best_move = mv;
-        }
-
-        if (score > alpha) {
-            alpha = score;
-        }
-
-        if (alpha >= beta) {
-            s.beta_cutoff_index_sum += move_index;
-            s.beta_cutoff_count++;
-
-            if (quiet) {
-                s.register_killer(ply, mv);
+            if (score > best_score) {
+                best_score = score;
+                best_move = mv;
             }
 
-            pos.unmake_move();
-            return best_score;
+            if (score > alpha) {
+                alpha = score;
+            }
+
+            if (alpha >= beta) {
+                s.beta_cutoff_index_sum += move_index;
+                s.beta_cutoff_count++;
+
+                if (quiet) {
+                    s.register_killer(ply, mv);
+                }
+
+                pos.unmake_move();
+                return best_score;
+            }
+
+            legal_move_index++;
         }
 
         pos.unmake_move();
+    }
+
+    if (legal_move_index == 0 && pos.is_checked[pos.to_move]) {
+        return -MATE_SCORE + ply;
     }
 
     tt_entry.hash = pos.zobrist;
@@ -322,16 +328,6 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
     }
 
     MoveList moves = pos.generate_moves();
-    pos.filter_moves(moves);
-
-    if (moves.count == 0) {
-        if (pos.is_checked[pos.to_move]) {
-            return -MATE_SCORE + ply;
-        }
-        else {
-            return 0;
-        }
-    }
 
     if (depth == 0) {
         return qsearch(pos, s, ply, alpha, beta);
@@ -353,13 +349,10 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
     Move quiets[256];
     int quiet_count = 0;
 
+    int legal_move_index = 0;
+
     for (int move_index = 0; move_index < moves.count; ++move_index) {
         Move mv = select_move(moves, move_scores, move_index);
-
-        Piece piece = Piece(pos.piece_at[move_from(mv)]);
-        int to = move_to(mv);
-
-        pos.make_move(mv);
 
         bool quiet = move_captured_piece(mv) == PIECE_NONE;
 
@@ -367,37 +360,55 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
             quiets[quiet_count++] = mv;
         }
 
-        int32_t score = -search(pos, s, depth-1, ply+1, -beta, -alpha);
+        Piece piece = Piece(pos.piece_at[move_from(mv)]);
+        int to = move_to(mv);
 
-        if (score > best_score) {
-            best_score = score;
-            best_move = mv;
-        }
+        pos.make_move(mv);
 
-        if (score > alpha) {
-            alpha = score;
-        }
+        if (!pos.is_checked[side]) {
+            int32_t score = -search(pos, s, depth-1, ply+1, -beta, -alpha);
 
-        if (alpha >= beta) {
-            s.beta_cutoff_index_sum += move_index;
-            s.beta_cutoff_count++;
-
-            int hist_bonus = 300 * depth - 250;
-
-            if (quiet) {
-                s.register_killer(ply, mv);
-                s.register_history(side, piece, to, hist_bonus);
-
-                for (int i = quiet_count-2; i >= 0; --i) {
-                    s.register_history(side, piece, to, -hist_bonus);
-                }
+            if (score > best_score) {
+                best_score = score;
+                best_move = mv;
             }
 
-            pos.unmake_move();
-            return best_score;
+            if (score > alpha) {
+                alpha = score;
+            }
+
+            if (alpha >= beta) {
+                s.beta_cutoff_index_sum += move_index;
+                s.beta_cutoff_count++;
+
+                int hist_bonus = 300 * depth - 250;
+
+                if (quiet) {
+                    s.register_killer(ply, mv);
+                    s.register_history(side, piece, to, hist_bonus);
+
+                    for (int i = quiet_count-2; i >= 0; --i) {
+                        s.register_history(side, piece, to, -hist_bonus);
+                    }
+                }
+
+                pos.unmake_move();
+                return best_score;
+            }
+
+            legal_move_index++;
         }
 
         pos.unmake_move();
+    }
+
+    if (legal_move_index == 0) {
+        if (pos.is_checked[pos.to_move]) {
+            return -MATE_SCORE + ply;
+        }
+        else {
+            return 0;
+        }
     }
 
     tt_entry.hash = pos.zobrist;
