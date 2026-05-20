@@ -7,8 +7,9 @@
 
 #include "limerikk.h"
 
-constexpr int32_t CAPTURE_SCORE = 10000;
-constexpr int32_t KILLER_SCORE  =  5000;
+constexpr int32_t GOOD_CAPTURE_SCORE = 100000;
+constexpr int32_t KILLER_SCORE       =  50000;
+constexpr int32_t QUIET_SCORE        =  10000;
 
 struct SearchContext {
     int node_count = 0;
@@ -126,10 +127,12 @@ static MoveScores score_moves(Position& pos, SearchContext& s, const MoveList& m
             x = KILLER_SCORE;
         }
         else if (quiet) {
-            x = score_quiet(pos, mv);
+            x = score_quiet(pos, mv) + QUIET_SCORE;
         }
         else {
-            x = score_capture(pos, mv) + CAPTURE_SCORE;
+            int32_t see_score = capture_see(pos, mv);
+            int32_t base = see_score >= 0 ? GOOD_CAPTURE_SCORE : 0;
+            x = score_capture(pos, mv) + base;
         }
 
         scores.data[i] = x;
