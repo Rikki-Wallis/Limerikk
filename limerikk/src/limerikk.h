@@ -242,6 +242,13 @@ struct Accumulator {
     int16_t* ptr() { return data[0]; }
 };
 
+struct SearchStatistics {
+    int nodes;
+    int qnodes;
+    float time;
+    float mean_cutoff_index;
+};
+
 struct Position {
     Side sides[2];
     int to_move;
@@ -314,7 +321,7 @@ struct Position {
     void update_eval(Piece captured_piece, int captured_pos, Piece moving_piece_start, Piece moving_piece_end, int move_from, int move_to, int rook_from, int rook_to, int side, int sign=1);
     void update_is_checked();
 
-    Move best_move(int depth, std::atomic<bool>& should_stop, Budgeter* budgeter = &null_budgeter, bool enable_uci_info=false, int64_t* score_out=nullptr);
+    Move best_move(int depth, std::atomic<bool>& should_stop, Budgeter* budgeter = &null_budgeter, bool enable_uci_info=false, int64_t* score_out=nullptr, SearchStatistics* stats = nullptr);
     
     bool is_move_legal_slow(Move move);
 

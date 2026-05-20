@@ -8,6 +8,11 @@
 
 struct SearchContext {
     int node_count;
+    int qnode_count;
+
+    int beta_cutoff_index_sum;
+    int beta_cutoff_count;
+
     Budgeter* budgeter;
     std::atomic<bool>& should_stop;
     bool exited;
@@ -127,6 +132,8 @@ static Move select_move(MoveList& moves, MoveScores& scores, int index) {
 } 
 
 static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, int32_t beta) {
+    s.qnode_count++;
+
     if (s.exit_on_node()) {
         return 0;
     }
@@ -171,6 +178,9 @@ static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, 
         }
 
         if (alpha >= beta) {
+            s.beta_cutoff_index_sum += move_index;
+            s.beta_cutoff_count++;
+
             pos.unmake_move();
             return best_score;
         }
@@ -221,6 +231,9 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
         }
 
         if (alpha >= beta) {
+            s.beta_cutoff_index_sum += move_index;
+            s.beta_cutoff_count++;
+
             pos.unmake_move();
             return best_score;
         }
@@ -270,7 +283,7 @@ static std::pair<Move, int32_t> best_move(Position& pos, SearchContext& s, int d
     };
 }
 
-Move Position::best_move(int depth, std::atomic<bool>& should_stop, Budgeter* budgeter, bool enable_uci_info, int64_t* score_out) {
+Move Position::best_move(int depth, std::atomic<bool>& should_stop, Budgeter* budgeter, bool enable_uci_info, int64_t* score_out, SearchStatistics* stats /*optional*/) {
     (void)enable_uci_info;
     (void)score_out;
 
@@ -318,6 +331,13 @@ Move Position::best_move(int depth, std::atomic<bool>& should_stop, Budgeter* bu
     }
 
     assert(best_move != NULL_MOVE);
+
+    if (stats) {
+        stats->nodes = s.node_count;
+        stats->qnodes = s.qnode_count;
+        stats->time = float(double(std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - start).count())/1000000.0);
+        stats->mean_cutoff_index = float(s.beta_cutoff_index_sum)/float(s.beta_cutoff_count);
+    }
 
     return best_move;
 }
