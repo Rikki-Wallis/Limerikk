@@ -40,6 +40,7 @@ struct SearchContext {
 
     Move killers[MAX_DEPTH][2] = {};
     TTEntry tt[TT_SIZE]{};
+    int32_t history[NUM_PIECE_TYPES][64] = {};
 
     SearchContext(Budgeter* budgeter, std::atomic<bool>& should_stop)
         : budgeter(budgeter), should_stop(should_stop)
@@ -51,6 +52,10 @@ struct SearchContext {
             killers[ply][0] = killers[ply][1];
             killers[ply][1] = mv;
         }
+    }
+
+    void register_history(Piece piece, int to, int depth) {
+        history[piece][to] += depth * depth;
     }
 
     bool exit_on_node() {
@@ -128,10 +133,9 @@ static int32_t capture_see(const Position& pos, Move mv) {
     return value;
 }
 
-static int32_t score_quiet(Position& pos, Move mv) {
-    (void)pos;
-    (void)mv;
-    return 0;
+static int32_t score_quiet(Position& pos, SearchContext& s, Move mv) {
+    Piece piece = Piece(pos.piece_at[move_from(mv)]);
+    return s.history[piece][move_to(mv)];
 }
 
 static int32_t score_capture(Position& pos, Move mv) {
@@ -154,12 +158,14 @@ static MoveScores score_moves(Position& pos, SearchContext& s, const MoveList& m
         if (mv == hash_move) {
             x = HASH_MOVE_SCORE;
         }
+        else if (quiet && promotion) {
+            x = PROMOTION_SCORE;
+        }
         else if (mv == s.killers[ply][0] || mv == s.killers[ply][1]) {
             x = KILLER_SCORE;
         }
         else if (quiet) {
-            int32_t base = promotion ? PROMOTION_SCORE : QUIET_SCORE;
-            x = score_quiet(pos, mv) + base;
+            x = score_quiet(pos, s, mv) + QUIET_SCORE;
         }
         else {
             int32_t see_score = capture_see(pos, mv);
@@ -337,6 +343,10 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
 
     for (int move_index = 0; move_index < moves.count; ++move_index) {
         Move mv = select_move(moves, move_scores, move_index);
+
+        Piece piece = Piece(pos.piece_at[move_from(mv)]);
+        int to = move_to(mv);
+
         pos.make_move(mv);
 
         bool quiet = move_captured_piece(mv) == PIECE_NONE;
@@ -358,6 +368,7 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
 
             if (quiet) {
                 s.register_killer(ply, mv);
+                s.register_history(piece, to, depth);
             }
 
             pos.unmake_move();
