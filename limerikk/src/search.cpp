@@ -327,12 +327,11 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
         return 0;
     }
 
-    MoveList moves = pos.generate_moves();
-
     if (depth == 0) {
         return qsearch(pos, s, ply, alpha, beta);
     }
 
+    // Transposition table lookup
     TTEntry& tt_entry = s.tt_query(pos.zobrist);
 
     Move hash_move = NULL_MOVE;
@@ -341,6 +340,24 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
         hash_move = tt_entry.best_move;
     }
 
+
+
+    // reverse futility pruning
+    // if our static evaluation is greater than beta by a margin
+    // assume we will fail-high
+
+    int rfp_margin = 150 * depth;
+
+    if (!pos.is_checked[side] &&
+        pos.signed_eval() >= beta + rfp_margin
+    ) {
+        return pos.signed_eval();
+    }
+    
+
+
+
+    MoveList moves = pos.generate_moves();
     MoveScores move_scores = score_moves(pos, s, moves, ply, hash_move);
 
     int32_t best_score = -INF_SCORE;
