@@ -248,6 +248,7 @@ struct SearchStatistics {
     float time;
     float mean_cutoff_index;
     float tt_hit_rate;
+    float nmp_cutoff_rate;
 };
 
 struct Position {
@@ -291,6 +292,8 @@ struct Position {
     MoveList generate_captures() const;
 
     std::unordered_map<std::string, Move> name_moves(std::span<Move> moves);
+
+    int32_t non_pawn_material() const;
 
     uint64_t all_pieces() const;
 
