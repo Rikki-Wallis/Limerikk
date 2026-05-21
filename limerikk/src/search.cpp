@@ -352,7 +352,8 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
     int rfp_margin = 150 * depth;
 
     if (!pos.is_checked[side] &&
-        pos.signed_eval() >= beta + rfp_margin
+        pos.signed_eval() >= beta + rfp_margin &&
+        std::abs(beta) < MATE_SCORE - 1000
     ) {
         return pos.signed_eval();
     }
