@@ -35,6 +35,9 @@ struct SearchContext {
     int tt_attempts = 0;
     int tt_hits = 0;
 
+    int nmp_attempts = 0;
+    int nmp_cutoffs = 0;
+
     Budgeter* budgeter;
     std::atomic<bool>& should_stop;
 
@@ -308,7 +311,7 @@ static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, 
     return best_score;
 }
 
-static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32_t alpha, int32_t beta, Move* best_move_out = nullptr) {
+static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32_t alpha, int32_t beta, Move* best_move_out = nullptr, bool allow_null_move = true) {
     int side = pos.to_move;
 
     if (best_move_out) {
@@ -327,7 +330,7 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
         return 0;
     }
 
-    if (depth == 0) {
+    if (depth <= 0) {
         return qsearch(pos, s, ply, alpha, beta);
     }
 
@@ -354,6 +357,31 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
         return pos.signed_eval();
     }
     
+
+    // null move pruning
+    // if we skip our turn and still beat beta
+    // any legal move will likely fail high
+
+    if (
+        allow_null_move && 
+        !pos.is_checked[side] &&
+        pos.non_pawn_material() > 0 && // prevent NMP in zugzwang positions (mostly pawn endgames)
+        std::abs(beta) < MATE_SCORE - 1000 &&
+        depth >= 4
+    ) {
+        s.nmp_attempts++;
+
+        int r = 3;
+
+        pos.make_null_move();
+        int32_t score = -search(pos, s, depth-1-r, ply+1, -beta, -(beta-1), nullptr, false);
+        pos.unmake_null_move();
+
+        if (score >= beta) {
+            s.nmp_cutoffs++;
+            return score;
+        }
+    }
 
 
 
@@ -489,6 +517,7 @@ Move Position::best_move(int depth, std::atomic<bool>& should_stop, Budgeter* bu
         stats->time = float(double(std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - start).count())/1000000.0);
         stats->mean_cutoff_index = float(s->beta_cutoff_index_sum)/float(s->beta_cutoff_count);
         stats->tt_hit_rate = float(s->tt_hits)/float(s->tt_attempts);
+        stats->nmp_cutoff_rate = float(s->nmp_cutoffs)/float(s->nmp_attempts);
     }
 
     return best_move;
