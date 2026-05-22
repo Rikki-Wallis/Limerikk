@@ -250,6 +250,7 @@ struct SearchStatistics {
     float tt_hit_rate;
     float nmp_cutoff_rate;
     float mean_lmr;
+    float expansions;
 };
 
 struct Position {

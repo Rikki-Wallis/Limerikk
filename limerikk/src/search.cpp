@@ -607,10 +607,45 @@ Move Position::best_move(int depth, std::atomic<bool>& should_stop, Budgeter* bu
     auto s = std::make_unique<SearchContext>(budgeter, should_stop);
 
     Move best_move = NULL_MOVE;
+
+    int32_t window_center;
+    int expansions = 0;
     
     for (int d = 1; d <= depth; ++d) {
         Move mv;
-        int32_t score = search(*this, *s, d, 0, -INF_SCORE, INF_SCORE, &mv);
+        int32_t score;
+
+        int32_t window_lo = 25;
+        int32_t window_hi = 25;
+        
+        for (;;) {
+            int32_t alpha = window_center - window_lo;
+            int32_t beta  = window_center + window_hi;
+
+            if (d < 4) {
+                alpha = -INF_SCORE;
+                beta = INF_SCORE;
+            }
+
+            alpha = std::clamp(alpha, -INF_SCORE, INF_SCORE);
+            beta = std::clamp(beta, -INF_SCORE, INF_SCORE);
+
+            score = search(*this, *s, d, 0, alpha, beta, &mv);
+
+            if (score > alpha && score < beta) {
+                break;
+            }
+            else if (score >= beta) {
+                window_hi *= 4;
+            }
+            else if (score <= alpha) {
+                window_lo *= 4;
+            }
+
+            expansions++;
+        }
+
+        window_center = score;
 
         if (s->exited) {
             break;
@@ -649,6 +684,7 @@ Move Position::best_move(int depth, std::atomic<bool>& should_stop, Budgeter* bu
         stats->tt_hit_rate = float(s->tt_hits)/float(s->tt_attempts);
         stats->nmp_cutoff_rate = float(s->nmp_cutoffs)/float(s->nmp_attempts);
         stats->mean_lmr = float(s->lmr_sum)/float(s->lmr_count);
+        stats->expansions = depth >= 4 ? float(expansions)/float(depth-3) : 0.0f;
     }
 
     return best_move;
