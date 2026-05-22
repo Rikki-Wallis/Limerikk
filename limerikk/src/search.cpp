@@ -443,19 +443,23 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
 
     int rfp_margin = 150 * depth;
 
-    if (!in_check &&
+    if (!pv_node &&
+        !in_check &&
         pos.signed_eval() >= beta + rfp_margin &&
         std::abs(beta) < MATE_SCORE - 1000
     ) {
         return pos.signed_eval();
     }
-    
+
+
+
 
     // null move pruning
     // if we skip our turn and still beat beta
     // any legal move will likely fail high
 
     if (
+        !pv_node &&
         allow_null_move && 
         !in_check &&
         pos.non_pawn_material() > 0 && // prevent NMP in zugzwang positions (mostly pawn endgames)
