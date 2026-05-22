@@ -440,6 +440,9 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
 
         int32_t hash_score;
         if (check_tt_cutoff(tt_entry, alpha, beta, depth, ply, &hash_score)) {
+            if (tt_entry.type == TT_PV && best_move_out) {
+                *best_move_out = hash_move;
+            }
             return hash_score;
         }
     }
