@@ -38,6 +38,9 @@ struct SearchContext {
     int nmp_attempts = 0;
     int nmp_cutoffs = 0;
 
+    int lmr_count = 0;
+    int lmr_sum = 0;
+
     Budgeter* budgeter;
     std::atomic<bool>& should_stop;
 
@@ -271,32 +274,35 @@ static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, 
 
         pos.make_move(mv);
 
-        if (!pos.is_checked[side]) {
-            int32_t score = -qsearch(pos, s, ply+1, -beta, -alpha);
-
-            if (score > best_score) {
-                best_score = score;
-                best_move = mv;
-            }
-
-            if (score > alpha) {
-                alpha = score;
-            }
-
-            if (alpha >= beta) {
-                s.beta_cutoff_index_sum += move_index;
-                s.beta_cutoff_count++;
-
-                if (quiet) {
-                    s.register_killer(ply, mv);
-                }
-
-                pos.unmake_move();
-                return best_score;
-            }
-
-            legal_move_index++;
+        if (pos.is_checked[side]) {
+            pos.unmake_move();
+            continue;
         }
+
+        int32_t score = -qsearch(pos, s, ply+1, -beta, -alpha);
+
+        if (score > best_score) {
+            best_score = score;
+        }
+
+        if (score > alpha) {
+            alpha = score;
+            best_move = mv;
+        }
+
+        if (alpha >= beta) {
+            s.beta_cutoff_index_sum += move_index;
+            s.beta_cutoff_count++;
+
+            if (quiet) {
+                s.register_killer(ply, mv);
+            }
+
+            pos.unmake_move();
+            return best_score;
+        }
+
+        legal_move_index++;
 
         pos.unmake_move();
     }
@@ -313,6 +319,7 @@ static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, 
 
 static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32_t alpha, int32_t beta, Move* best_move_out = nullptr, bool allow_null_move = true) {
     int side = pos.to_move;
+    bool in_check = pos.is_checked[side];
 
     if (best_move_out) {
         *best_move_out = NULL_MOVE;
@@ -351,7 +358,7 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
 
     int rfp_margin = 150 * depth;
 
-    if (!pos.is_checked[side] &&
+    if (!in_check &&
         pos.signed_eval() >= beta + rfp_margin &&
         std::abs(beta) < MATE_SCORE - 1000
     ) {
@@ -365,7 +372,7 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
 
     if (
         allow_null_move && 
-        !pos.is_checked[side] &&
+        !in_check &&
         pos.non_pawn_material() > 0 && // prevent NMP in zugzwang positions (mostly pawn endgames)
         std::abs(beta) < MATE_SCORE - 1000 &&
         depth >= 4
@@ -400,50 +407,86 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
     for (int move_index = 0; move_index < moves.count; ++move_index) {
         Move mv = select_move(moves, move_scores, move_index);
 
-        bool quiet = move_captured_piece(mv) == PIECE_NONE;
-
-        if (quiet) {
-            quiets[quiet_count++] = mv;
-        }
-
         Piece piece = Piece(pos.piece_at[move_from(mv)]);
         int to = move_to(mv);
 
         pos.make_move(mv);
 
-        if (!pos.is_checked[side]) {
-            int32_t score = -search(pos, s, depth-1, ply+1, -beta, -alpha);
+        if (pos.is_checked[side]) {
+            pos.unmake_move();
+            continue;
+        }
 
-            if (score > best_score) {
-                best_score = score;
-                best_move = mv;
-            }
+        bool quiet = move_captured_piece(mv) == PIECE_NONE;
+        //bool gives_check = pos.is_checked[opponent(side)];
+        //bool promotion = move_type(mv) == MOVE_PROMOTION;
+
+        if (quiet) {
+            quiets[quiet_count++] = mv;
+        }
+
+        // calculate the late move reduction
+        // the idea is that late moves are not likely to cause a beta-cutoff, so we can reduce
+        // their search depth
+
+        int lmr = 0;
+        if (
+            depth >= 4 &&
+            legal_move_index > 2 &&
+            !in_check
+        ) {
+            float lmr_frac = 0.5f + std::log(float(depth)) * std::log(float(legal_move_index)) / 4.0f;
+            lmr = std::max(int(std::round(lmr_frac)), 0);
+
+            s.lmr_count++;
+            s.lmr_sum += lmr;
+        }
+
+
+
+
+        int32_t score;
+
+        if (lmr > 0) {
+            score = -search(pos, s, depth-1-lmr, ply+1, -(alpha+1), -alpha);
 
             if (score > alpha) {
-                alpha = score;
+                score = -search(pos, s, depth-1, ply+1, -beta, -alpha);
             }
-
-            if (alpha >= beta) {
-                s.beta_cutoff_index_sum += move_index;
-                s.beta_cutoff_count++;
-
-                int hist_bonus = 300 * depth - 250;
-
-                if (quiet) {
-                    s.register_killer(ply, mv);
-                    s.register_history(side, piece, to, hist_bonus);
-
-                    for (int i = quiet_count-2; i >= 0; --i) {
-                        s.register_history(side, piece, to, -hist_bonus);
-                    }
-                }
-
-                pos.unmake_move();
-                return best_score;
-            }
-
-            legal_move_index++;
         }
+        else {
+            score = -search(pos, s, depth-1, ply+1, -beta, -alpha);
+        }
+
+        if (score > best_score) {
+            best_score = score;
+        }
+
+        if (score > alpha) {
+            alpha = score;
+            best_move = mv;
+        }
+
+        if (alpha >= beta) {
+            s.beta_cutoff_index_sum += move_index;
+            s.beta_cutoff_count++;
+
+            int hist_bonus = 300 * depth - 250;
+
+            if (quiet) {
+                s.register_killer(ply, mv);
+                s.register_history(side, piece, to, hist_bonus);
+
+                for (int i = quiet_count-2; i >= 0; --i) {
+                    s.register_history(side, piece, to, -hist_bonus);
+                }
+            }
+
+            pos.unmake_move();
+            return best_score;
+        }
+
+        legal_move_index++;
 
         pos.unmake_move();
     }
@@ -519,6 +562,7 @@ Move Position::best_move(int depth, std::atomic<bool>& should_stop, Budgeter* bu
         stats->mean_cutoff_index = float(s->beta_cutoff_index_sum)/float(s->beta_cutoff_count);
         stats->tt_hit_rate = float(s->tt_hits)/float(s->tt_attempts);
         stats->nmp_cutoff_rate = float(s->nmp_cutoffs)/float(s->nmp_attempts);
+        stats->mean_lmr = float(s->lmr_sum)/float(s->lmr_count);
     }
 
     return best_move;
