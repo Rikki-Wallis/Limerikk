@@ -284,6 +284,9 @@ static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, 
 
     s.qnode_count++;
 
+    int32_t alpha0 = alpha;
+    //int32_t beta0  = beta;
+
     if (s.exit_on_node()) {
         return 0;
     }
@@ -384,7 +387,7 @@ static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, 
         return -MATE_SCORE + ply;
     }
 
-    tt_entry.write(pos.zobrist, best_score > alpha ? TT_PV : TT_ALL, best_move, best_score, 0, ply);
+    tt_entry.write(pos.zobrist, best_score > alpha0 ? TT_PV : TT_ALL, best_move, best_score, 0, ply);
 
     return best_score;
 }
@@ -392,6 +395,9 @@ static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, 
 static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32_t alpha, int32_t beta, Move* best_move_out = nullptr, bool allow_null_move = true) {
     int side = pos.to_move;
     bool in_check = pos.is_checked[side];
+
+    int32_t alpha0 = alpha;
+    //int32_t beta0  = beta;
 
     bool pv_node = beta > alpha + 1;
 
@@ -591,7 +597,7 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
         }
     }
 
-    tt_entry.write(pos.zobrist, best_score > alpha ? TT_PV : TT_ALL, best_move, best_score, depth, ply);
+    tt_entry.write(pos.zobrist, best_score > alpha0 ? TT_PV : TT_ALL, best_move, best_score, depth, ply);
 
     if (best_move_out) {
         *best_move_out = best_move;
