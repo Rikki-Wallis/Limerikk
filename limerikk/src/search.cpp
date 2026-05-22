@@ -16,10 +16,48 @@ constexpr int32_t QUIET_SCORE           =  20000;
 constexpr int32_t MAX_HISTORY           =   5000; 
 constexpr int32_t BAD_CAPTURE_SCORE     =      0;
 
+enum TTType {
+    TT_PV,
+    TT_ALL,
+    TT_CUT
+};
 
 struct TTEntry {
     uint64_t hash;
+    TTType type;
     Move best_move;
+    int32_t _score;
+    int depth;
+
+    void write(uint64_t hash, TTType ty, Move move, int32_t score, int depth, int ply) {
+        this->hash = hash;
+        this->type = ty;
+        this->best_move = move;
+        this->depth = depth;
+
+        // adjust mate scores to be relative to the current node, rather than the root
+
+        if (score < -MATE_SCORE + 1000) {
+            score -= ply;
+        }
+        else if (score > MATE_SCORE - 1000) {
+            score += ply;
+        }
+
+        this->_score = score;
+    }
+
+    int32_t score(int ply) {
+        if (_score < -MATE_SCORE + 1000) {
+            return _score + ply;
+        } 
+
+        if (_score > MATE_SCORE - 1000) {
+            return _score - ply;
+        }
+
+        return _score;
+    }
 };
 
 constexpr size_t TT_SIZE = (1 << 20);
@@ -217,6 +255,30 @@ static Move select_move(MoveList& moves, MoveScores& scores, int index) {
     return moves.data[index];
 } 
 
+static bool check_tt_cutoff(TTEntry& tt_entry, int32_t alpha, int32_t beta, int depth, int ply, int32_t* score_out) {
+    if (tt_entry.depth >= depth) {
+        int32_t hash_score = tt_entry.score(ply);
+        *score_out = hash_score;
+
+        switch (tt_entry.type) {
+            case TT_PV: // exact score
+                return true;
+            case TT_ALL: // upper-bound
+                if (hash_score <= alpha) {
+                    return true; // fail-low
+                }
+                break;
+            case TT_CUT: // lower-bound
+                if (hash_score >= beta) {
+                    return true; // fail-high
+                }
+                break;
+        }
+    }
+
+    return false;
+}
+
 static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, int32_t beta) {
     int side = pos.to_move;
 
@@ -250,13 +312,21 @@ static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, 
         return best_score;
     }
 
+
     TTEntry& tt_entry = s.tt_query(pos.zobrist);
 
     Move hash_move = NULL_MOVE;
 
     if (tt_entry.hash == pos.zobrist) {
         hash_move = tt_entry.best_move;
+
+        int32_t hash_score;
+        if (check_tt_cutoff(tt_entry, alpha, beta, 0, ply, &hash_score)){
+            return hash_score;
+        }
     }
+
+
 
     MoveScores move_scores = score_moves(pos, s, moves, ply, hash_move);
     Move best_move = NULL_MOVE;
@@ -299,6 +369,9 @@ static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, 
             }
 
             pos.unmake_move();
+
+            tt_entry.write(pos.zobrist, TT_CUT, mv, score, 0, ply);
+
             return best_score;
         }
 
@@ -311,8 +384,7 @@ static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, 
         return -MATE_SCORE + ply;
     }
 
-    tt_entry.hash = pos.zobrist;
-    tt_entry.best_move = best_move;
+    tt_entry.write(pos.zobrist, best_score > alpha ? TT_PV : TT_ALL, best_move, best_score, 0, ply);
 
     return best_score;
 }
@@ -343,13 +415,24 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
         return qsearch(pos, s, ply, alpha, beta);
     }
 
-    // Transposition table lookup
+
+
+    // transposition table lookup
+    // we use the hash move for move ordering
+    // and the stored score for bounds adjustments
+    // and cutoffs
+
     TTEntry& tt_entry = s.tt_query(pos.zobrist);
 
     Move hash_move = NULL_MOVE;
 
     if (tt_entry.hash == pos.zobrist) {
         hash_move = tt_entry.best_move;
+
+        int32_t hash_score;
+        if (check_tt_cutoff(tt_entry, alpha, beta, depth, ply, &hash_score)) {
+            return hash_score;
+        }
     }
 
 
@@ -484,6 +567,9 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
             }
 
             pos.unmake_move();
+
+            tt_entry.write(pos.zobrist, TT_CUT, mv, score, depth, ply);
+
             return best_score;
         }
 
@@ -501,8 +587,7 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
         }
     }
 
-    tt_entry.hash = pos.zobrist;
-    tt_entry.best_move = best_move;
+    tt_entry.write(pos.zobrist, best_score > alpha ? TT_PV : TT_ALL, best_move, best_score, depth, ply);
 
     if (best_move_out) {
         *best_move_out = best_move;
