@@ -274,32 +274,35 @@ static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, 
 
         pos.make_move(mv);
 
-        if (!pos.is_checked[side]) {
-            int32_t score = -qsearch(pos, s, ply+1, -beta, -alpha);
-
-            if (score > best_score) {
-                best_score = score;
-                best_move = mv;
-            }
-
-            if (score > alpha) {
-                alpha = score;
-            }
-
-            if (alpha >= beta) {
-                s.beta_cutoff_index_sum += move_index;
-                s.beta_cutoff_count++;
-
-                if (quiet) {
-                    s.register_killer(ply, mv);
-                }
-
-                pos.unmake_move();
-                return best_score;
-            }
-
-            legal_move_index++;
+        if (pos.is_checked[side]) {
+            pos.unmake_move();
+            continue;
         }
+
+        int32_t score = -qsearch(pos, s, ply+1, -beta, -alpha);
+
+        if (score > best_score) {
+            best_score = score;
+        }
+
+        if (score > alpha) {
+            alpha = score;
+            best_move = mv;
+        }
+
+        if (alpha >= beta) {
+            s.beta_cutoff_index_sum += move_index;
+            s.beta_cutoff_count++;
+
+            if (quiet) {
+                s.register_killer(ply, mv);
+            }
+
+            pos.unmake_move();
+            return best_score;
+        }
+
+        legal_move_index++;
 
         pos.unmake_move();
     }
@@ -409,9 +412,14 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
 
         pos.make_move(mv);
 
-        bool gives_check = pos.is_checked[opponent(side)];
+        if (pos.is_checked[side]) {
+            pos.unmake_move();
+            continue;
+        }
+
         bool quiet = move_captured_piece(mv) == PIECE_NONE;
-        bool promotion = move_type(mv) == MOVE_PROMOTION;
+        //bool gives_check = pos.is_checked[opponent(side)];
+        //bool promotion = move_type(mv) == MOVE_PROMOTION;
 
         if (quiet) {
             quiets[quiet_count++] = mv;
@@ -424,13 +432,10 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
         int lmr = 0;
         if (
             depth >= 4 &&
-            legal_move_index > 3 &&
-            quiet &&
-            !gives_check &&
-            !in_check &&
-            !promotion
+            legal_move_index > 2 &&
+            !in_check
         ) {
-            float lmr_frac = 0.5f + std::log(float(depth)) * std::log(float(legal_move_index)) / 6.0f;
+            float lmr_frac = 0.5f + std::log(float(depth)) * std::log(float(legal_move_index)) / 4.0f;
             lmr = std::max(int(std::round(lmr_frac)), 0);
 
             s.lmr_count++;
@@ -440,50 +445,48 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
 
 
 
-        if (!pos.is_checked[side]) {
-            int32_t score;
+        int32_t score;
 
-            if (lmr > 0) {
-                score = -search(pos, s, depth-1-lmr, ply+1, -(alpha+1), -alpha);
-
-                if (score > alpha) {
-                    score = -search(pos, s, depth-1, ply+1, -beta, -alpha);
-                }
-            }
-            else {
-                score = -search(pos, s, depth-1, ply+1, -beta, -alpha);
-            }
-
-            if (score > best_score) {
-                best_score = score;
-                best_move = mv;
-            }
+        if (lmr > 0) {
+            score = -search(pos, s, depth-1-lmr, ply+1, -(alpha+1), -alpha);
 
             if (score > alpha) {
-                alpha = score;
+                score = -search(pos, s, depth-1, ply+1, -beta, -alpha);
             }
-
-            if (alpha >= beta) {
-                s.beta_cutoff_index_sum += move_index;
-                s.beta_cutoff_count++;
-
-                int hist_bonus = 300 * depth - 250;
-
-                if (quiet) {
-                    s.register_killer(ply, mv);
-                    s.register_history(side, piece, to, hist_bonus);
-
-                    for (int i = quiet_count-2; i >= 0; --i) {
-                        s.register_history(side, piece, to, -hist_bonus);
-                    }
-                }
-
-                pos.unmake_move();
-                return best_score;
-            }
-
-            legal_move_index++;
         }
+        else {
+            score = -search(pos, s, depth-1, ply+1, -beta, -alpha);
+        }
+
+        if (score > best_score) {
+            best_score = score;
+        }
+
+        if (score > alpha) {
+            alpha = score;
+            best_move = mv;
+        }
+
+        if (alpha >= beta) {
+            s.beta_cutoff_index_sum += move_index;
+            s.beta_cutoff_count++;
+
+            int hist_bonus = 300 * depth - 250;
+
+            if (quiet) {
+                s.register_killer(ply, mv);
+                s.register_history(side, piece, to, hist_bonus);
+
+                for (int i = quiet_count-2; i >= 0; --i) {
+                    s.register_history(side, piece, to, -hist_bonus);
+                }
+            }
+
+            pos.unmake_move();
+            return best_score;
+        }
+
+        legal_move_index++;
 
         pos.unmake_move();
     }
