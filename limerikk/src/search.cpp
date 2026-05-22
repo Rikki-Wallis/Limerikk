@@ -321,6 +321,8 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
     int side = pos.to_move;
     bool in_check = pos.is_checked[side];
 
+    bool pv_node = beta > alpha + 1;
+
     if (best_move_out) {
         *best_move_out = NULL_MOVE;
     }
@@ -443,20 +445,19 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
         }
 
 
-
+        // perform principal variation search
 
         int32_t score;
 
-        if (lmr > 0) {
+        if (!pv_node || legal_move_index > 0) {
             score = -search(pos, s, depth-1-lmr, ply+1, -(alpha+1), -alpha);
-
-            if (score > alpha) {
-                score = -search(pos, s, depth-1, ply+1, -beta, -alpha);
-            }
         }
-        else {
+
+        if (pv_node && (legal_move_index == 0 || score > alpha)) {
             score = -search(pos, s, depth-1, ply+1, -beta, -alpha);
         }
+
+
 
         if (score > best_score) {
             best_score = score;
