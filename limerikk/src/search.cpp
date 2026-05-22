@@ -121,13 +121,16 @@ struct SearchContext {
         return exited;
     }
 
+    template<bool Stats>
     TTEntry& tt_query(uint64_t hash) {
         size_t index = hash & TT_MASK;
 
         TTEntry& e = tt[index];
 
-        tt_attempts++;
-        tt_hits += e.hash == hash;
+        if constexpr (Stats) {
+            tt_attempts++;
+            tt_hits += e.hash == hash;
+        }
 
         return e;
     }
@@ -316,7 +319,7 @@ static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, 
     }
 
 
-    TTEntry& tt_entry = s.tt_query(pos.zobrist);
+    TTEntry& tt_entry = s.tt_query<false>(pos.zobrist);
 
     Move hash_move = NULL_MOVE;
 
@@ -428,7 +431,7 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
     // and the stored score for bounds adjustments
     // and cutoffs
 
-    TTEntry& tt_entry = s.tt_query(pos.zobrist);
+    TTEntry& tt_entry = s.tt_query<true>(pos.zobrist);
 
     Move hash_move = NULL_MOVE;
 
