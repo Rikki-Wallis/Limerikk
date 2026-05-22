@@ -19,6 +19,7 @@ int main() {
         print("  ebf: {:.2f}\n", std::exp(std::log(float(stats.nodes))/float(depth)));
         print("  tt-hit: {:.2f}%\n", stats.tt_hit_rate*100.0f);
         print("  nmp-cutoff: {:.2f}%\n", stats.nmp_cutoff_rate*100.0f);
+        print("  mean-lmr: {:.2f}\n", stats.mean_lmr);
         print("\n");
     }
 }

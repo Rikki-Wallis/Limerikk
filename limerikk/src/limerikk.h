@@ -249,6 +249,7 @@ struct SearchStatistics {
     float mean_cutoff_index;
     float tt_hit_rate;
     float nmp_cutoff_rate;
+    float mean_lmr;
 };
 
 struct Position {
