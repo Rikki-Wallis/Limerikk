@@ -567,16 +567,18 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
 
             int hist_bonus = 300 * depth - 250;
 
+            pos.unmake_move();
+
             if (quiet) {
                 s.register_killer(ply, mv);
                 s.register_history(side, piece, to, hist_bonus);
 
                 for (int i = quiet_count-2; i >= 0; --i) {
-                    s.register_history(side, piece, to, -hist_bonus);
+                    Piece malus_piece = Piece(pos.piece_at[move_from(quiets[i])]);
+                    int malus_to = move_to(quiets[i]);
+                    s.register_history(side, malus_piece, malus_to, -hist_bonus);
                 }
             }
-
-            pos.unmake_move();
 
             tt_entry.write(pos.zobrist, TT_CUT, mv, score, depth, ply);
 
