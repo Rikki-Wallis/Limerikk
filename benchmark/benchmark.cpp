@@ -1,3 +1,5 @@
+#include <cmath>
+
 #include "limerikk.h"
 
 int main() {
