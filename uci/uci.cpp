@@ -171,30 +171,42 @@ static int allocate_time(int time, int inc) {
     return time/40 + inc/2;
 }
 
-static int calculate_move_time(const GoParams& p, int to_move) {
+static std::pair<double, double> calculate_move_time(const GoParams& p, int to_move) {
     if (p.infinite) {
-        return INT32_MAX;
+        return {INFINITY, INFINITY};
     }
 
     if (p.movetime) {
-        return *p.movetime;
+        double t = double(*p.movetime)/1000.0;
+        return {t, t};
     }
 
-    int time = to_move == WHITE ? p.wtime.value_or(0) : p.btime.value_or(0);
-    int inc = to_move == WHITE ? p.winc.value_or(0) : p.binc.value_or(0);
+    int time_ms = to_move == WHITE ? p.wtime.value_or(0) : p.btime.value_or(0);
+    int inc_ms = to_move == WHITE ? p.winc.value_or(0) : p.binc.value_or(0);
+
+    double time = double(time_ms) / 1000.0;
+    double inc = double(inc_ms) / 1000.0;
 
     if (time == 0) {
-        return INT32_MAX;
+        return {INFINITY, INFINITY};
     }
 
-    return allocate_time(time, inc);
+    // need to allocate time
+
+    double soft = time / 40 + inc * 0.5;
+    soft *= 0.9;
+
+    double hard = std::min(soft * 4.0, time / 4);
+
+    return {soft, hard};
 }
 
 class UCIBudgeter : public Budgeter {
 public:
-    UCIBudgeter(int node_count, double seconds)
-        : _nodes(node_count), _seconds(seconds)
-    {}
+    UCIBudgeter(int node_count, double soft_limit, double hard_limit)
+        : _nodes(node_count), _soft_limit(soft_limit), _hard_limit(hard_limit)
+    {
+    }
 
     virtual void init() override {
         _start = Clock::now();
@@ -203,12 +215,19 @@ public:
     virtual bool should_exit(int node_count) const override {
         int64_t elapsed_microseconds = std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - _start).count();
         double elapsed_s = double(elapsed_microseconds)/1000000.0;
-        return node_count >= _nodes || elapsed_s >= _seconds;
+        return node_count >= _nodes || elapsed_s >= _hard_limit;
+    }
+
+    virtual bool should_start_next_iteration() const override {
+        int64_t elapsed_microseconds = std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - _start).count();
+        double elapsed_s = double(elapsed_microseconds)/1000000.0;
+        return elapsed_s < _soft_limit;
     }
 
 private:
     int _nodes;
-    double _seconds;
+    double _soft_limit;
+    double _hard_limit;
     TimePoint _start;
 };
 
@@ -252,16 +271,15 @@ int main() {
 
             GoParams g = parse_go_command(line);
 
-            int time_ms = calculate_move_time(g, position.to_move);
-            double time_s = double(time_ms)/1000.0*0.95;
+            auto [soft_limit, hard_limit] = calculate_move_time(g, position.to_move);
 
             int node_budget = g.nodes.value_or(INT_MAX);
             int depth = g.depth.value_or(40);
 
             should_stop = false;
             
-            thread = std::thread([&position, depth, &should_stop, time_s, node_budget](){
-                UCIBudgeter budgeter(node_budget, time_s);
+            thread = std::thread([&position, depth, &should_stop, soft_limit, hard_limit, node_budget](){
+                UCIBudgeter budgeter(node_budget, soft_limit, hard_limit);
                 Move move = position.best_move(depth, should_stop, &budgeter, true);
                 std::cout << "bestmove " << to_uci_move(move) << "\n";
             });

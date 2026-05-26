@@ -226,11 +226,13 @@ public:
     virtual ~Budgeter() = default;
     virtual void init() {}
     virtual bool should_exit(int node_count) const = 0;
+    virtual bool should_start_next_iteration() const = 0;
 };
 
 class NullBudgeter : public Budgeter {
 public:
     virtual bool should_exit(int node_count) const override;
+    virtual bool should_start_next_iteration() const override;
 };
 
 extern NullBudgeter null_budgeter;
@@ -473,6 +475,10 @@ public:
         return s >= _limit;
     }
 
+    virtual bool should_start_next_iteration() const override {
+        return true;
+    }
+
 private:
     double _limit;
     TimePoint _start;
@@ -486,6 +492,10 @@ public:
 
     virtual bool should_exit(int node_count) const override {
         return node_count >= _limit;
+    }
+
+    virtual bool should_start_next_iteration() const override {
+        return true;
     }
 
 private:

@@ -643,6 +643,10 @@ Move Position::best_move(int depth, std::atomic<bool>& should_stop, Budgeter* bu
     int expansions = 0;
     
     for (int d = 1; d <= depth; ++d) {
+        if (!s->budgeter->should_start_next_iteration()) {
+            break;
+        }
+
         Move mv;
         int32_t score;
 
