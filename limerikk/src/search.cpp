@@ -7,14 +7,14 @@
 
 #include "limerikk.h"
 
-constexpr int32_t HASH_MOVE_SCORE       = 500000;
-constexpr int32_t GOOD_CAPTURE_SCORE    = 200000;
-constexpr int32_t PROMOTION_SCORE       = 200000;
-constexpr int32_t NEUTRAL_CAPTURE_SCORE = 100000;
-constexpr int32_t KILLER_SCORE          =  50000;
-constexpr int32_t QUIET_SCORE           =  20000;
-constexpr int32_t MAX_HISTORY           =   5000; 
-constexpr int32_t BAD_CAPTURE_SCORE     =      0;
+constexpr int32_t HASH_MOVE_SCORE       = 5000000;
+constexpr int32_t GOOD_CAPTURE_SCORE    = 2000000;
+constexpr int32_t PROMOTION_SCORE       = 2000000;
+constexpr int32_t NEUTRAL_CAPTURE_SCORE = 1000000;
+constexpr int32_t KILLER_SCORE          =  500000;
+constexpr int32_t QUIET_SCORE           =  200000;
+constexpr int32_t MAX_HISTORY           =   50000; 
+constexpr int32_t BAD_CAPTURE_SCORE     =       0;
 
 enum TTType {
     TT_PV,
@@ -25,8 +25,9 @@ enum TTType {
 struct ContinuationTable {
     int16_t table[2][NUM_PIECE_TYPES][64];
 
-    int16_t& get(int side, Piece piece, int to) {
-        return table[side][piece][to];
+    void update(int side, Piece piece, int to, int32_t bonus) {
+        int32_t clamped_bonus = std::clamp(bonus, -MAX_HISTORY, MAX_HISTORY);
+        table[side][piece][to] += clamped_bonus - table[side][piece][to] * std::abs(clamped_bonus) / MAX_HISTORY;
     }
 };
 
@@ -100,7 +101,7 @@ struct SearchContext {
     SearchEntry search_stack[MAX_DEPTH];
     SearchEntry* ss = nullptr;
 
-    ContinuationTable cont_history[2][NUM_PIECE_TYPES][64];
+    ContinuationTable cont_history[2][NUM_PIECE_TYPES][64] = {};
 
     Budgeter* budgeter;
     std::atomic<bool>& should_stop;
@@ -109,7 +110,7 @@ struct SearchContext {
 
     Move killers[MAX_DEPTH][2] = {};
     TTEntry tt[TT_SIZE]{};
-    int32_t history[2][NUM_PIECE_TYPES][64] = {};
+    ContinuationTable history = {};
 
     SearchContext(Budgeter* budgeter, std::atomic<bool>& should_stop)
         : budgeter(budgeter), should_stop(should_stop)
@@ -123,9 +124,14 @@ struct SearchContext {
         }
     }
 
-    void register_history(int side, Piece piece, int to, int32_t bonus) {
-        int32_t clamped_bonus = std::clamp(bonus, -MAX_HISTORY, MAX_HISTORY);
-        history[side][piece][to] += clamped_bonus - history[side][piece][to] * std::abs(clamped_bonus) / MAX_HISTORY;
+    void update_histories(int side, Piece piece, int to, int16_t bonus) {
+        history.update(side, piece, to, bonus);
+
+        for (int offset : {1, 2, 4}) {
+            if (ss >= search_stack+offset && (ss-offset)->cont_hist) {
+                (ss-offset)->cont_hist->update(side, piece, to, bonus);
+            }
+        }
     }
 
     bool exit_on_node() {
@@ -208,13 +214,24 @@ static int32_t capture_see(const Position& pos, Move mv) {
 
 static int32_t score_quiet(Position& pos, SearchContext& s, Move mv) {
     Piece piece = Piece(pos.piece_at[move_from(mv)]);
-    return s.history[pos.to_move][piece][move_to(mv)];
+    int side = move_side(mv);
+    int to = move_to(mv);
+
+    int32_t score = s.history.table[side][piece][to];
+
+    for (int i : {1, 2, 4}) {
+        if (s.ss >= (s.search_stack+i) && (s.ss-i)->cont_hist) {
+            score += (s.ss-i)->cont_hist->table[side][piece][to];
+        }
+    }
+
+    return score;
 }
 
 static int32_t score_capture(Position& pos, Move mv) {
     Piece captured = move_captured_piece(mv);
     Piece moving = Piece(pos.piece_at[move_from(mv)]);
-    return piece_value_table[captured] - moving;
+    return piece_value_table[captured]*10 - piece_value_table[moving];
 }
 
 static MoveScores score_moves(Position& pos, SearchContext& s, const MoveList& moves, int ply, Move hash_move) {
@@ -308,10 +325,7 @@ static bool check_tt_cutoff(TTEntry& tt_entry, int32_t alpha, int32_t beta, int 
 static void push_move(SearchContext& s, Position& pos, Move mv) {
     ContinuationTable* table = nullptr;
 
-    if (mv == NULL_MOVE) {
-        table = &s.cont_history[0][0][0]; // not real
-    }
-    else {
+    if (mv != NULL_MOVE) {
         Piece piece = Piece(pos.piece_at[move_from(mv)]);
         int to = move_to(mv);
         int side = move_side(mv);
@@ -637,18 +651,20 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
             s.beta_cutoff_index_sum += move_index;
             s.beta_cutoff_count++;
 
-            int hist_bonus = 300 * depth - 250;
+            int16_t hist_bonus = 300 * int16_t(depth) - 250;
 
             pop_move(s, pos);
 
             if (quiet) {
                 s.register_killer(ply, mv);
-                s.register_history(side, piece, to, hist_bonus);
+
+                s.update_histories(side, piece, to, hist_bonus);
 
                 for (int i = quiet_count-2; i >= 0; --i) {
                     Piece malus_piece = Piece(pos.piece_at[move_from(quiets[i])]);
                     int malus_to = move_to(quiets[i]);
-                    s.register_history(side, malus_piece, malus_to, -hist_bonus);
+
+                    s.update_histories(side, malus_piece, malus_to, int16_t(-hist_bonus));
                 }
             }
 
