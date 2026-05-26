@@ -22,6 +22,14 @@ enum TTType {
     TT_CUT
 };
 
+struct ContinuationTable {
+    int16_t table[2][NUM_PIECE_TYPES][64];
+
+    int16_t& get(int side, Piece piece, int to) {
+        return table[side][piece][to];
+    }
+};
+
 struct TTEntry {
     uint64_t hash;
     TTType type;
@@ -63,6 +71,11 @@ struct TTEntry {
 constexpr size_t TT_SIZE = (1 << 20);
 constexpr uint64_t TT_MASK = TT_SIZE - 1;
 
+struct SearchEntry {
+    ContinuationTable* cont_hist;
+    Move move;
+};
+
 struct SearchContext {
     int node_count = 0;
     int qnode_count = 0;
@@ -83,6 +96,11 @@ struct SearchContext {
 
     int reduced_searches = 0;
     int reduced_re_searches = 0;
+
+    SearchEntry search_stack[MAX_DEPTH];
+    SearchEntry* ss = nullptr;
+
+    ContinuationTable cont_history[2][NUM_PIECE_TYPES][64];
 
     Budgeter* budgeter;
     std::atomic<bool>& should_stop;
@@ -287,6 +305,41 @@ static bool check_tt_cutoff(TTEntry& tt_entry, int32_t alpha, int32_t beta, int 
     return false;
 }
 
+static void push_move(SearchContext& s, Position& pos, Move mv) {
+    ContinuationTable* table = nullptr;
+
+    if (mv == NULL_MOVE) {
+        table = &s.cont_history[0][0][0]; // not real
+    }
+    else {
+        Piece piece = Piece(pos.piece_at[move_from(mv)]);
+        int to = move_to(mv);
+        int side = move_side(mv);
+        table = &s.cont_history[side][piece][to];
+    }
+
+    if (mv == NULL_MOVE) {
+        pos.make_null_move();
+    }
+    else {
+        pos.make_move(mv);
+    }
+
+    *(s.ss++) = {
+        .cont_hist = table,
+        .move = mv
+    };
+}
+
+static void pop_move(SearchContext& s, Position& pos) {
+    if ((--s.ss)->move == NULL_MOVE) {
+        pos.unmake_null_move();
+    }
+    else {
+        pos.unmake_move();
+    }
+}
+
 static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, int32_t beta) {
     int side = pos.to_move;
 
@@ -353,10 +406,10 @@ static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, 
             continue; // skip bad captures
         }
 
-        pos.make_move(mv);
+        push_move(s, pos, mv);
 
         if (pos.is_checked[side]) {
-            pos.unmake_move();
+            pop_move(s, pos);
             continue;
         }
 
@@ -379,7 +432,7 @@ static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, 
                 s.register_killer(ply, mv);
             }
 
-            pos.unmake_move();
+            pop_move(s, pos);
 
             tt_entry.write(pos.zobrist, TT_CUT, mv, score, 0, ply);
 
@@ -388,7 +441,7 @@ static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, 
 
         legal_move_index++;
 
-        pos.unmake_move();
+        pop_move(s, pos);
     }
 
     if (legal_move_index == 0 && pos.is_checked[pos.to_move]) {
@@ -489,9 +542,9 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
 
         int r = 3;
 
-        pos.make_null_move();
+        push_move(s, pos, NULL_MOVE);
         int32_t score = -search(pos, s, depth-1-r, ply+1, -beta, -(beta-1), nullptr, false);
-        pos.unmake_null_move();
+        pop_move(s, pos);
 
         if (score >= beta) {
             s.nmp_cutoffs++;
@@ -518,10 +571,10 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
         Piece piece = Piece(pos.piece_at[move_from(mv)]);
         int to = move_to(mv);
 
-        pos.make_move(mv);
+        push_move(s, pos, mv);
 
         if (pos.is_checked[side]) {
-            pos.unmake_move();
+            pop_move(s, pos);
             continue;
         }
 
@@ -586,7 +639,7 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
 
             int hist_bonus = 300 * depth - 250;
 
-            pos.unmake_move();
+            pop_move(s, pos);
 
             if (quiet) {
                 s.register_killer(ply, mv);
@@ -606,7 +659,7 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
 
         legal_move_index++;
 
-        pos.unmake_move();
+        pop_move(s, pos);
     }
 
     if (legal_move_index == 0) {
@@ -636,6 +689,7 @@ Move Position::best_move(int depth, std::atomic<bool>& should_stop, Budgeter* bu
     TimePoint start = Clock::now();
 
     auto s = std::make_unique<SearchContext>(budgeter, should_stop);
+    s->ss = s->search_stack;
 
     Move best_move = NULL_MOVE;
 
