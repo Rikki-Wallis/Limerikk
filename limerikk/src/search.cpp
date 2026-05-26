@@ -543,7 +543,7 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
             legal_move_index > 2 &&
             !in_check
         ) {
-            float lmr_frac = 0.5f + std::log(float(depth)) * std::log(float(legal_move_index)) / 2.0f;
+            float lmr_frac = 0.5f + std::log(float(depth)) * std::log(float(legal_move_index)) / 3.0f;
             lmr = std::max(int(std::round(lmr_frac)), 0);
 
             s.lmr_count++;
