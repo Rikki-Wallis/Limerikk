@@ -252,6 +252,7 @@ struct SearchStatistics {
     float mean_lmr;
     float expansions;
     int sel_depth;
+    float reduced_re_search_rate;
 };
 
 struct Position {

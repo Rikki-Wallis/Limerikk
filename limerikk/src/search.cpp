@@ -81,6 +81,9 @@ struct SearchContext {
 
     int sel_depth = 0;
 
+    int reduced_searches = 0;
+    int reduced_re_searches = 0;
+
     Budgeter* budgeter;
     std::atomic<bool>& should_stop;
 
@@ -540,7 +543,7 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
             legal_move_index > 2 &&
             !in_check
         ) {
-            float lmr_frac = 0.5f + std::log(float(depth)) * std::log(float(legal_move_index)) / 4.0f;
+            float lmr_frac = 0.5f + std::log(float(depth)) * std::log(float(legal_move_index)) / 2.0f;
             lmr = std::max(int(std::round(lmr_frac)), 0);
 
             s.lmr_count++;
@@ -554,8 +557,14 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
 
         if (!pv_node || legal_move_index > 0) {
             score = -search(pos, s, depth-1-lmr, ply+1, -(alpha+1), -alpha);
-        }
 
+            s.reduced_searches += lmr > 0;
+
+            if (lmr > 0 && score > alpha) {
+                s.reduced_re_searches++;
+                score = -search(pos, s, depth-1, ply+1, -(alpha+1), -alpha);
+            }
+        }
         if (pv_node && (legal_move_index == 0 || score > alpha)) {
             score = -search(pos, s, depth-1, ply+1, -beta, -alpha);
         }
@@ -708,6 +717,7 @@ Move Position::best_move(int depth, std::atomic<bool>& should_stop, Budgeter* bu
         stats->mean_lmr = float(s->lmr_sum)/float(s->lmr_count);
         stats->expansions = depth >= 4 ? float(expansions)/float(depth-3) : 0.0f;
         stats->sel_depth = s->sel_depth;
+        stats->reduced_re_search_rate = float(s->reduced_re_searches)/float(s->reduced_searches);
     }
 
     return best_move;

@@ -24,6 +24,7 @@ int main() {
         print("  mean-lmr: {:.2f}\n", stats.mean_lmr);
         print("  expansions: {:.2f}\n", stats.expansions);
         print("  sel-depth: {}\n", stats.sel_depth);
+        print("  reduced-re-search-rate: {:.2f}%\n", stats.reduced_re_search_rate * 100.0f);
         print("\n");
     }
 }
