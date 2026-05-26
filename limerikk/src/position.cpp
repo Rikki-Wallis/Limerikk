@@ -488,6 +488,10 @@ bool NullBudgeter::should_exit(int node_count) const {
     return false;
 }
 
+bool NullBudgeter::should_start_next_iteration() const {
+    return true;
+}
+
 int32_t Position::non_pawn_material() const {
     return std::popcount(sides[WHITE].bb[PIECE_KNIGHT]) * piece_value_table[PIECE_KNIGHT] +
            std::popcount(sides[WHITE].bb[PIECE_BISHOP]) * piece_value_table[PIECE_BISHOP] +
