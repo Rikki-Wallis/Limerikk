@@ -79,6 +79,8 @@ struct SearchContext {
     int lmr_count = 0;
     int lmr_sum = 0;
 
+    int sel_depth = 0;
+
     Budgeter* budgeter;
     std::atomic<bool>& should_stop;
 
@@ -402,6 +404,8 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
     int32_t alpha0 = alpha;
     //int32_t beta0  = beta;
 
+    s.sel_depth = std::max(s.sel_depth, ply);
+
     bool pv_node = beta > alpha + 1;
 
     if (best_move_out) {
@@ -686,7 +690,7 @@ Move Position::best_move(int depth, std::atomic<bool>& should_stop, Budgeter* bu
 
             int nps = int(float(s->node_count) / float(seconds));
 
-            print("info depth {} time {} nodes {} nps {} score {} pv {}\n", d, ms, s->node_count, nps, score_info, to_uci_move(mv));
+            print("info depth {} seldepth {} time {} nodes {} nps {} score {} pv {}\n", d, s->sel_depth, ms, s->node_count, nps, score_info, to_uci_move(mv));
         }
 
         best_move = mv;
@@ -703,6 +707,7 @@ Move Position::best_move(int depth, std::atomic<bool>& should_stop, Budgeter* bu
         stats->nmp_cutoff_rate = float(s->nmp_cutoffs)/float(s->nmp_attempts);
         stats->mean_lmr = float(s->lmr_sum)/float(s->lmr_count);
         stats->expansions = depth >= 4 ? float(expansions)/float(depth-3) : 0.0f;
+        stats->sel_depth = s->sel_depth;
     }
 
     return best_move;

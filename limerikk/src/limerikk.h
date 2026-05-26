@@ -251,6 +251,7 @@ struct SearchStatistics {
     float nmp_cutoff_rate;
     float mean_lmr;
     float expansions;
+    int sel_depth;
 };
 
 struct Position {

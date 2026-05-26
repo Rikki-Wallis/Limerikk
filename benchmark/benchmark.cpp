@@ -21,6 +21,7 @@ int main() {
         print("  nmp-cutoff: {:.2f}%\n", stats.nmp_cutoff_rate*100.0f);
         print("  mean-lmr: {:.2f}\n", stats.mean_lmr);
         print("  expansions: {:.2f}\n", stats.expansions);
+        print("  sel-depth: {}\n", stats.sel_depth);
         print("\n");
     }
 }
