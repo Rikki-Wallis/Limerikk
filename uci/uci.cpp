@@ -237,7 +237,8 @@ int main() {
 
     std::string line;
     std::thread thread;
-    std::atomic<bool> should_stop = false;
+
+    std::unique_ptr<SearchContext> ctx = std::make_unique<SearchContext>(&null_budgeter);
 
     Position position = *Position::parse_fen(START_FEN);
     
@@ -252,19 +253,20 @@ int main() {
         }
         else if (line == "ucinewgame") {
             position = *Position::parse_fen(START_FEN);
+            ctx = std::make_unique<SearchContext>(&null_budgeter);
         }
         else if (line.starts_with("position")) {
             parse_position(line, &position);
         }
         else if (line == "quit") {
-            should_stop = true;
+            ctx->should_stop = true;
             if (thread.joinable()) {
                 thread.join();
             }
             return 0;
         }
         else if (line.starts_with("go")) {
-            should_stop = true;
+            ctx->should_stop = true;
             if (thread.joinable()) {
                 thread.join();
             }
@@ -276,16 +278,19 @@ int main() {
             int node_budget = g.nodes.value_or(INT_MAX);
             int depth = g.depth.value_or(40);
 
-            should_stop = false;
+            ctx->should_stop = false;
             
-            thread = std::thread([&position, depth, &should_stop, soft_limit, hard_limit, node_budget](){
+            thread = std::thread([&position, depth, &ctx, soft_limit, hard_limit, node_budget](){
                 UCIBudgeter budgeter(node_budget, soft_limit, hard_limit);
-                Move move = position.best_move(depth, should_stop, &budgeter, true);
+                ctx->budgeter = &budgeter;
+
+                Move move = position.best_move(*ctx, depth, true);
                 std::cout << "bestmove " << to_uci_move(move) << "\n";
             });
         }
         else if (line == "stop") {
-            should_stop = true;
+            ctx->should_stop = true;
+
             if (thread.joinable()) {
                 thread.join();
             }

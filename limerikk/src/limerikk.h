@@ -16,6 +16,9 @@
 
 constexpr size_t _ACCUMULATOR_PERSP_SIZE = 64;
 
+constexpr size_t TT_SIZE = (1 << 20);
+constexpr uint64_t TT_MASK = TT_SIZE - 1;
+
 float nnue_infer(std::span<uint64_t> bbs);
 
 using Clock = std::chrono::steady_clock;
@@ -257,6 +260,94 @@ struct SearchStatistics {
     float reduced_re_search_rate;
 };
 
+enum TTType {
+    TT_PV,
+    TT_ALL,
+    TT_CUT
+};
+
+struct ContinuationTable {
+    int16_t table[2][NUM_PIECE_TYPES][64];
+
+    void update(int side, Piece piece, int to, int32_t bonus);
+};
+
+struct TTEntry {
+    uint64_t hash;
+    TTType type;
+    Move best_move;
+    int32_t _score;
+    int depth;
+
+    void write(uint64_t hash, TTType ty, Move move, int32_t score, int depth, int ply);
+    int32_t score(int ply);
+};
+
+struct SearchEntry {
+    ContinuationTable* cont_hist;
+    Move move;
+};
+
+struct SearchMetrics {
+    int node_count = 0;
+    int qnode_count = 0;
+
+    int beta_cutoff_index_sum = 0;
+    int beta_cutoff_count = 0;
+
+    int tt_attempts = 0;
+    int tt_hits = 0;
+
+    int nmp_attempts = 0;
+    int nmp_cutoffs = 0;
+
+    int lmr_count = 0;
+    int lmr_sum = 0;
+
+    int sel_depth = 0;
+
+    int reduced_searches = 0;
+    int reduced_re_searches = 0;
+};
+
+struct SearchContext {
+    SearchMetrics* metrics;
+    bool exited = false;
+
+    Budgeter* budgeter;
+    std::atomic<bool> should_stop = false;
+
+    ContinuationTable history = {};
+    ContinuationTable cont_history[2][NUM_PIECE_TYPES][64] = {};
+    Move killers[MAX_DEPTH][2] = {};
+    TTEntry tt[TT_SIZE]{};
+
+    SearchContext(Budgeter* budgeter)
+        : budgeter(budgeter)
+    {
+    }
+
+    void register_killer(int ply, Move mv);
+
+    void update_histories(int side, Piece piece, int to, int16_t bonus, SearchEntry* ss, int ply);
+    bool exit_on_node();
+
+    template<bool Stats>
+    TTEntry& tt_query(uint64_t hash) {
+        size_t index = hash & TT_MASK;
+
+        TTEntry& e = tt[index];
+
+        if constexpr (Stats) {
+            metrics->tt_attempts++;
+            metrics->tt_hits += e.hash == hash;
+        }
+
+        return e;
+    }
+};
+
+
 struct Position {
     Side sides[2];
     int to_move;
@@ -331,12 +422,12 @@ struct Position {
     void update_eval(Piece captured_piece, int captured_pos, Piece moving_piece_start, Piece moving_piece_end, int move_from, int move_to, int rook_from, int rook_to, int side, int sign=1);
     void update_is_checked();
 
-    Move best_move(int depth, std::atomic<bool>& should_stop, Budgeter* budgeter = &null_budgeter, bool enable_uci_info=false, int64_t* score_out=nullptr, SearchStatistics* stats = nullptr);
+    Move best_move(SearchContext& s, int depth, bool enable_uci_info=false, int64_t* score_out=nullptr, SearchStatistics* stats = nullptr);
     
     bool is_move_legal_slow(Move move);
 
     std::optional<GameResult> game_result();
-    Move think(int depth, std::atomic<bool>& should_stop, Budgeter* budgeter = &null_budgeter, bool enable_uci_info=false, int64_t* score_out=nullptr);
+    Move think(SearchContext& s, int depth, bool enable_uci_info=false, int64_t* score_out=nullptr);
 
     uint64_t compute_zobrist() const;
 
