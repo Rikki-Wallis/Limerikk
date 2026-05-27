@@ -16,154 +16,75 @@ constexpr int32_t QUIET_SCORE           =  200000;
 constexpr int32_t MAX_HISTORY           =   50000; 
 constexpr int32_t BAD_CAPTURE_SCORE     =       0;
 
-enum TTType {
-    TT_PV,
-    TT_ALL,
-    TT_CUT
-};
+void ContinuationTable::update(int side, Piece piece, int to, int32_t bonus) {
+    int32_t clamped_bonus = std::clamp(bonus, -MAX_HISTORY, MAX_HISTORY);
+    table[side][piece][to] += clamped_bonus - table[side][piece][to] * std::abs(clamped_bonus) / MAX_HISTORY;
+}
 
-struct ContinuationTable {
-    int16_t table[2][NUM_PIECE_TYPES][64];
+void TTEntry::write(uint64_t hash, TTType ty, Move move, int32_t score, int depth, int ply) {
+    this->hash = hash;
+    this->type = ty;
+    this->best_move = move;
+    this->depth = depth;
 
-    void update(int side, Piece piece, int to, int32_t bonus) {
-        int32_t clamped_bonus = std::clamp(bonus, -MAX_HISTORY, MAX_HISTORY);
-        table[side][piece][to] += clamped_bonus - table[side][piece][to] * std::abs(clamped_bonus) / MAX_HISTORY;
+    // adjust mate scores to be relative to the current node, rather than the root
+
+    if (score < -MATE_SCORE + 1000) {
+        score -= ply;
     }
-};
-
-struct TTEntry {
-    uint64_t hash;
-    TTType type;
-    Move best_move;
-    int32_t _score;
-    int depth;
-
-    void write(uint64_t hash, TTType ty, Move move, int32_t score, int depth, int ply) {
-        this->hash = hash;
-        this->type = ty;
-        this->best_move = move;
-        this->depth = depth;
-
-        // adjust mate scores to be relative to the current node, rather than the root
-
-        if (score < -MATE_SCORE + 1000) {
-            score -= ply;
-        }
-        else if (score > MATE_SCORE - 1000) {
-            score += ply;
-        }
-
-        this->_score = score;
+    else if (score > MATE_SCORE - 1000) {
+        score += ply;
     }
 
-    int32_t score(int ply) {
-        if (_score < -MATE_SCORE + 1000) {
-            return _score + ply;
-        } 
+    this->_score = score;
+}
 
-        if (_score > MATE_SCORE - 1000) {
-            return _score - ply;
-        }
+int32_t TTEntry::score(int ply) {
+    if (_score < -MATE_SCORE + 1000) {
+        return _score + ply;
+    } 
 
-        return _score;
-    }
-};
-
-constexpr size_t TT_SIZE = (1 << 20);
-constexpr uint64_t TT_MASK = TT_SIZE - 1;
-
-struct SearchEntry {
-    ContinuationTable* cont_hist;
-    Move move;
-};
-
-struct SearchContext {
-    int node_count = 0;
-    int qnode_count = 0;
-
-    int beta_cutoff_index_sum = 0;
-    int beta_cutoff_count = 0;
-
-    int tt_attempts = 0;
-    int tt_hits = 0;
-
-    int nmp_attempts = 0;
-    int nmp_cutoffs = 0;
-
-    int lmr_count = 0;
-    int lmr_sum = 0;
-
-    int sel_depth = 0;
-
-    int reduced_searches = 0;
-    int reduced_re_searches = 0;
-
-    SearchEntry search_stack[MAX_DEPTH];
-    SearchEntry* ss = nullptr;
-
-    ContinuationTable cont_history[2][NUM_PIECE_TYPES][64] = {};
-
-    Budgeter* budgeter;
-    std::atomic<bool>& should_stop;
-
-    bool exited = false;
-
-    Move killers[MAX_DEPTH][2] = {};
-    TTEntry tt[TT_SIZE]{};
-    ContinuationTable history = {};
-
-    SearchContext(Budgeter* budgeter, std::atomic<bool>& should_stop)
-        : budgeter(budgeter), should_stop(should_stop)
-    {
+    if (_score > MATE_SCORE - 1000) {
+        return _score - ply;
     }
 
-    void register_killer(int ply, Move mv) {
-        if (mv != killers[ply][0] && mv != killers[ply][1]) {
-            killers[ply][0] = killers[ply][1];
-            killers[ply][1] = mv;
+    return _score;
+}
+
+
+void SearchContext::register_killer(int ply, Move mv) {
+    if (mv != killers[ply][0] && mv != killers[ply][1]) {
+        killers[ply][0] = killers[ply][1];
+        killers[ply][1] = mv;
+    }
+}
+
+void SearchContext::update_histories(int side, Piece piece, int to, int16_t bonus, SearchEntry* ss, int ply) {
+    history.update(side, piece, to, bonus);
+
+    for (int offset : {1, 2, 4}) {
+        if (ply > offset && (ss-offset)->cont_hist) {
+            (ss-offset)->cont_hist->update(side, piece, to, bonus);
         }
     }
+}
 
-    void update_histories(int side, Piece piece, int to, int16_t bonus) {
-        history.update(side, piece, to, bonus);
-
-        for (int offset : {1, 2, 4}) {
-            if (ss >= search_stack+offset && (ss-offset)->cont_hist) {
-                (ss-offset)->cont_hist->update(side, piece, to, bonus);
-            }
-        }
+bool SearchContext::exit_on_node() {
+    if (should_stop) {
+        exited = true;
     }
 
-    bool exit_on_node() {
-        if (should_stop) {
+    metrics->node_count++;
+
+    if ((metrics->node_count & 0xfff) == 0) {
+        if (budgeter->should_exit(metrics->node_count)) {
             exited = true;
         }
-
-        node_count++;
-
-        if ((node_count & 0xfff) == 0) {
-            if (budgeter->should_exit(node_count)) {
-                exited = true;
-            }
-        }
-
-        return exited;
     }
 
-    template<bool Stats>
-    TTEntry& tt_query(uint64_t hash) {
-        size_t index = hash & TT_MASK;
+    return exited;
+}
 
-        TTEntry& e = tt[index];
-
-        if constexpr (Stats) {
-            tt_attempts++;
-            tt_hits += e.hash == hash;
-        }
-
-        return e;
-    }
-};
 
 struct MoveScores {
     int32_t data[256];
@@ -212,7 +133,7 @@ static int32_t capture_see(const Position& pos, Move mv) {
     return value;
 }
 
-static int32_t score_quiet(Position& pos, SearchContext& s, Move mv) {
+static int32_t score_quiet(Position& pos, SearchContext& s, Move mv, int ply, SearchEntry* ss) {
     Piece piece = Piece(pos.piece_at[move_from(mv)]);
     int side = move_side(mv);
     int to = move_to(mv);
@@ -220,8 +141,8 @@ static int32_t score_quiet(Position& pos, SearchContext& s, Move mv) {
     int32_t score = s.history.table[side][piece][to];
 
     for (int i : {1, 2, 4}) {
-        if (s.ss >= (s.search_stack+i) && (s.ss-i)->cont_hist) {
-            score += (s.ss-i)->cont_hist->table[side][piece][to];
+        if (ply > i && (ss-i)->cont_hist) {
+            score += (ss-i)->cont_hist->table[side][piece][to];
         }
     }
 
@@ -234,7 +155,7 @@ static int32_t score_capture(Position& pos, Move mv) {
     return piece_value_table[captured]*10 - piece_value_table[moving];
 }
 
-static MoveScores score_moves(Position& pos, SearchContext& s, const MoveList& moves, int ply, Move hash_move) {
+static MoveScores score_moves(Position& pos, SearchContext& s, const MoveList& moves, int ply, Move hash_move, SearchEntry* ss) {
     MoveScores scores;
 
     for (int i = 0; i < moves.count; ++i) {
@@ -255,7 +176,7 @@ static MoveScores score_moves(Position& pos, SearchContext& s, const MoveList& m
             x = KILLER_SCORE;
         }
         else if (quiet) {
-            x = score_quiet(pos, s, mv) + QUIET_SCORE;
+            x = score_quiet(pos, s, mv, ply, ss) + QUIET_SCORE;
         }
         else {
             int32_t see_score = capture_see(pos, mv);
@@ -322,7 +243,7 @@ static bool check_tt_cutoff(TTEntry& tt_entry, int32_t alpha, int32_t beta, int 
     return false;
 }
 
-static void push_move(SearchContext& s, Position& pos, Move mv) {
+static void push_move(SearchContext& s, Position& pos, Move mv, SearchEntry* ss) {
     ContinuationTable* table = nullptr;
 
     if (mv != NULL_MOVE) {
@@ -339,14 +260,14 @@ static void push_move(SearchContext& s, Position& pos, Move mv) {
         pos.make_move(mv);
     }
 
-    *(s.ss++) = {
+    *ss = {
         .cont_hist = table,
         .move = mv
     };
 }
 
-static void pop_move(SearchContext& s, Position& pos) {
-    if ((--s.ss)->move == NULL_MOVE) {
+static void pop_move(Position& pos, SearchEntry* ss) {
+    if (ss->move == NULL_MOVE) {
         pos.unmake_null_move();
     }
     else {
@@ -354,13 +275,15 @@ static void pop_move(SearchContext& s, Position& pos) {
     }
 }
 
-static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, int32_t beta) {
+static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, int32_t beta, SearchEntry* ss) {
     int side = pos.to_move;
 
-    s.qnode_count++;
+    s.metrics->qnode_count++;
 
     int32_t alpha0 = alpha;
     //int32_t beta0  = beta;
+
+    bool pv_node = beta > alpha + 1;
 
     if (s.exit_on_node()) {
         return 0;
@@ -399,14 +322,14 @@ static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, 
         hash_move = tt_entry.best_move;
 
         int32_t hash_score;
-        if (check_tt_cutoff(tt_entry, alpha, beta, 0, ply, &hash_score)){
+        if (!pv_node && check_tt_cutoff(tt_entry, alpha, beta, 0, ply, &hash_score)){
             return hash_score;
         }
     }
 
 
 
-    MoveScores move_scores = score_moves(pos, s, moves, ply, hash_move);
+    MoveScores move_scores = score_moves(pos, s, moves, ply, hash_move, ss);
     Move best_move = NULL_MOVE;
 
     int legal_move_index = 0;
@@ -420,14 +343,14 @@ static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, 
             continue; // skip bad captures
         }
 
-        push_move(s, pos, mv);
+        push_move(s, pos, mv, ss);
 
         if (pos.is_checked[side]) {
-            pop_move(s, pos);
+            pop_move(pos, ss);
             continue;
         }
 
-        int32_t score = -qsearch(pos, s, ply+1, -beta, -alpha);
+        int32_t score = -qsearch(pos, s, ply+1, -beta, -alpha, ss+1);
 
         if (score > best_score) {
             best_score = score;
@@ -439,14 +362,14 @@ static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, 
         }
 
         if (alpha >= beta) {
-            s.beta_cutoff_index_sum += move_index;
-            s.beta_cutoff_count++;
+            s.metrics->beta_cutoff_index_sum += move_index;
+            s.metrics->beta_cutoff_count++;
 
             if (quiet) {
                 s.register_killer(ply, mv);
             }
 
-            pop_move(s, pos);
+            pop_move(pos, ss);
 
             tt_entry.write(pos.zobrist, TT_CUT, mv, score, 0, ply);
 
@@ -455,7 +378,7 @@ static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, 
 
         legal_move_index++;
 
-        pop_move(s, pos);
+        pop_move(pos, ss);
     }
 
     if (legal_move_index == 0 && pos.is_checked[pos.to_move]) {
@@ -467,14 +390,14 @@ static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, 
     return best_score;
 }
 
-static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32_t alpha, int32_t beta, Move* best_move_out = nullptr, bool allow_null_move = true) {
+static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32_t alpha, int32_t beta, SearchEntry* ss, Move* best_move_out = nullptr, bool allow_null_move = true) {
     int side = pos.to_move;
     bool in_check = pos.is_checked[side];
 
     int32_t alpha0 = alpha;
     //int32_t beta0  = beta;
 
-    s.sel_depth = std::max(s.sel_depth, ply);
+    s.metrics->sel_depth = std::max(s.metrics->sel_depth, ply);
 
     bool pv_node = beta > alpha + 1;
 
@@ -495,7 +418,7 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
     }
 
     if (depth <= 0) {
-        return qsearch(pos, s, ply, alpha, beta);
+        return qsearch(pos, s, ply, alpha, beta, ss);
     }
 
 
@@ -513,7 +436,7 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
         hash_move = tt_entry.best_move;
 
         int32_t hash_score;
-        if (check_tt_cutoff(tt_entry, alpha, beta, depth, ply, &hash_score)) {
+        if (!pv_node && check_tt_cutoff(tt_entry, alpha, beta, depth, ply, &hash_score)) {
             if (tt_entry.type == TT_PV && best_move_out) {
                 *best_move_out = hash_move;
             }
@@ -552,16 +475,16 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
         std::abs(beta) < MATE_SCORE - 1000 &&
         depth >= 4
     ) {
-        s.nmp_attempts++;
+        s.metrics->nmp_attempts++;
 
         int r = 3;
 
-        push_move(s, pos, NULL_MOVE);
-        int32_t score = -search(pos, s, depth-1-r, ply+1, -beta, -(beta-1), nullptr, false);
-        pop_move(s, pos);
+        push_move(s, pos, NULL_MOVE, ss);
+        int32_t score = -search(pos, s, depth-1-r, ply+1, -beta, -(beta-1), ss+1, nullptr, false);
+        pop_move(pos, ss);
 
         if (score >= beta) {
-            s.nmp_cutoffs++;
+            s.metrics->nmp_cutoffs++;
             return score;
         }
     }
@@ -569,7 +492,7 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
 
 
     MoveList moves = pos.generate_moves();
-    MoveScores move_scores = score_moves(pos, s, moves, ply, hash_move);
+    MoveScores move_scores = score_moves(pos, s, moves, ply, hash_move, ss);
 
     int32_t best_score = -INF_SCORE;
     Move best_move = NULL_MOVE;
@@ -585,10 +508,10 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
         Piece piece = Piece(pos.piece_at[move_from(mv)]);
         int to = move_to(mv);
 
-        push_move(s, pos, mv);
+        push_move(s, pos, mv, ss);
 
         if (pos.is_checked[side]) {
-            pop_move(s, pos);
+            pop_move(pos, ss);
             continue;
         }
 
@@ -613,8 +536,8 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
             float lmr_frac = 0.5f + std::log(float(depth)) * std::log(float(legal_move_index)) / 3.0f;
             lmr = std::max(int(std::round(lmr_frac)), 0);
 
-            s.lmr_count++;
-            s.lmr_sum += lmr;
+            s.metrics->lmr_count++;
+            s.metrics->lmr_sum += lmr;
         }
 
 
@@ -623,17 +546,17 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
         int32_t score;
 
         if (!pv_node || legal_move_index > 0) {
-            score = -search(pos, s, depth-1-lmr, ply+1, -(alpha+1), -alpha);
+            score = -search(pos, s, depth-1-lmr, ply+1, -(alpha+1), -alpha, ss+1);
 
-            s.reduced_searches += lmr > 0;
+            s.metrics->reduced_searches += lmr > 0;
 
             if (lmr > 0 && score > alpha) {
-                s.reduced_re_searches++;
-                score = -search(pos, s, depth-1, ply+1, -(alpha+1), -alpha);
+                s.metrics->reduced_re_searches++;
+                score = -search(pos, s, depth-1, ply+1, -(alpha+1), -alpha, ss+1);
             }
         }
         if (pv_node && (legal_move_index == 0 || score > alpha)) {
-            score = -search(pos, s, depth-1, ply+1, -beta, -alpha);
+            score = -search(pos, s, depth-1, ply+1, -beta, -alpha, ss+1);
         }
 
 
@@ -648,23 +571,23 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
         }
 
         if (alpha >= beta) {
-            s.beta_cutoff_index_sum += move_index;
-            s.beta_cutoff_count++;
+            s.metrics->beta_cutoff_index_sum += move_index;
+            s.metrics->beta_cutoff_count++;
 
             int16_t hist_bonus = 300 * int16_t(depth) - 250;
 
-            pop_move(s, pos);
+            pop_move(pos, ss);
 
             if (quiet) {
                 s.register_killer(ply, mv);
 
-                s.update_histories(side, piece, to, hist_bonus);
+                s.update_histories(side, piece, to, hist_bonus, ss, ply);
 
                 for (int i = quiet_count-2; i >= 0; --i) {
                     Piece malus_piece = Piece(pos.piece_at[move_from(quiets[i])]);
                     int malus_to = move_to(quiets[i]);
 
-                    s.update_histories(side, malus_piece, malus_to, int16_t(-hist_bonus));
+                    s.update_histories(side, malus_piece, malus_to, int16_t(-hist_bonus), ss, ply);
                 }
             }
 
@@ -675,7 +598,7 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
 
         legal_move_index++;
 
-        pop_move(s, pos);
+        pop_move(pos, ss);
     }
 
     if (legal_move_index == 0) {
@@ -696,16 +619,19 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
     return best_score;
 }
 
-Move Position::best_move(int depth, std::atomic<bool>& should_stop, Budgeter* budgeter, bool enable_uci_info, int64_t* score_out, SearchStatistics* stats /*optional*/) {
-    (void)enable_uci_info;
+Move Position::best_move(SearchContext& s, int depth, bool enable_uci_info, int64_t* score_out, SearchStatistics* stats) {
     (void)score_out;
-
-    budgeter->init();
 
     TimePoint start = Clock::now();
 
-    auto s = std::make_unique<SearchContext>(budgeter, should_stop);
-    s->ss = s->search_stack;
+    s.budgeter->init();
+
+    SearchEntry search_stack[MAX_DEPTH];
+    SearchEntry* ss = search_stack;
+
+    SearchMetrics metrics{};
+    s.metrics = &metrics;
+    s.exited = false;
 
     Move best_move = NULL_MOVE;
 
@@ -713,7 +639,7 @@ Move Position::best_move(int depth, std::atomic<bool>& should_stop, Budgeter* bu
     int expansions = 0;
     
     for (int d = 1; d <= depth; ++d) {
-        if (!s->budgeter->should_start_next_iteration()) {
+        if (!s.budgeter->should_start_next_iteration()) {
             break;
         }
 
@@ -735,7 +661,7 @@ Move Position::best_move(int depth, std::atomic<bool>& should_stop, Budgeter* bu
             alpha = std::clamp(alpha, -INF_SCORE, INF_SCORE);
             beta = std::clamp(beta, -INF_SCORE, INF_SCORE);
 
-            score = search(*this, *s, d, 0, alpha, beta, &mv);
+            score = search(*this, s, d, 0, alpha, beta, ss, &mv);
 
             if (score > alpha && score < beta) {
                 break;
@@ -752,7 +678,7 @@ Move Position::best_move(int depth, std::atomic<bool>& should_stop, Budgeter* bu
 
         window_center = score;
 
-        if (s->exited) {
+        if (s.exited) {
             break;
         }
 
@@ -771,9 +697,9 @@ Move Position::best_move(int depth, std::atomic<bool>& should_stop, Budgeter* bu
             long long ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - start).count();
             auto seconds = double(std::chrono::duration_cast<std::chrono::microseconds>(now - start).count()) / 1000000;
 
-            int nps = int(float(s->node_count) / float(seconds));
+            int nps = int(float(metrics.node_count) / float(seconds));
 
-            print("info depth {} seldepth {} time {} nodes {} nps {} score {} pv {}\n", d, s->sel_depth, ms, s->node_count, nps, score_info, to_uci_move(mv));
+            print("info depth {} seldepth {} time {} nodes {} nps {} score {} pv {}\n", d, metrics.sel_depth, ms, metrics.node_count, nps, score_info, to_uci_move(mv));
         }
 
         best_move = mv;
@@ -782,22 +708,24 @@ Move Position::best_move(int depth, std::atomic<bool>& should_stop, Budgeter* bu
     assert(best_move != NULL_MOVE);
 
     if (stats) {
-        stats->nodes = s->node_count;
-        stats->qnodes = s->qnode_count;
+        stats->nodes = metrics.node_count;
+        stats->qnodes = metrics.qnode_count;
         stats->time = float(double(std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - start).count())/1000000.0);
-        stats->mean_cutoff_index = float(s->beta_cutoff_index_sum)/float(s->beta_cutoff_count);
-        stats->tt_hit_rate = float(s->tt_hits)/float(s->tt_attempts);
-        stats->nmp_cutoff_rate = float(s->nmp_cutoffs)/float(s->nmp_attempts);
-        stats->mean_lmr = float(s->lmr_sum)/float(s->lmr_count);
+        stats->mean_cutoff_index = float(metrics.beta_cutoff_index_sum)/float(metrics.beta_cutoff_count);
+        stats->tt_hit_rate = float(metrics.tt_hits)/float(metrics.tt_attempts);
+        stats->nmp_cutoff_rate = float(metrics.nmp_cutoffs)/float(metrics.nmp_attempts);
+        stats->mean_lmr = float(metrics.lmr_sum)/float(metrics.lmr_count);
         stats->expansions = depth >= 4 ? float(expansions)/float(depth-3) : 0.0f;
-        stats->sel_depth = s->sel_depth;
-        stats->reduced_re_search_rate = float(s->reduced_re_searches)/float(s->reduced_searches);
+        stats->sel_depth = metrics.sel_depth;
+        stats->reduced_re_search_rate = float(metrics.reduced_re_searches)/float(metrics.reduced_searches);
     }
+
+    s.metrics = nullptr;
 
     return best_move;
 }
 
-Move Position::think(int depth, std::atomic<bool>& should_stop, Budgeter* budgeter, bool enable_uci_info, int64_t* score_out) {
+Move Position::think(SearchContext& s, int depth, bool enable_uci_info, int64_t* score_out) {
     uint64_t hash = encode_polyglot();
     std::vector<PolyglotEntry> p_moves = probe_book(hash);
 
@@ -807,7 +735,7 @@ Move Position::think(int depth, std::atomic<bool>& should_stop, Budgeter* budget
         assert(is_move_legal_slow(move));
         return move;
     } else {
-        Move best = best_move(depth, should_stop, budgeter, enable_uci_info, score_out);
+        Move best = best_move(s, depth, enable_uci_info, score_out);
         assert(best != NULL_MOVE);
         return best;
     }
