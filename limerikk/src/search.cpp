@@ -171,11 +171,9 @@ static Move select_move(MoveList& moves, MoveScores& scores, int index) {
 }
 
 static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, int32_t beta, SearchEntry* ss) {
-    if (ply > 4) {
-        return pos.signed_eval();
-    }
-
     int side = pos.to_move;
+
+    bool in_check = pos.is_checked[side];
 
     s.metrics->qnode_count++;
 
@@ -208,7 +206,7 @@ static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, 
 
     int32_t best_score = -INF_SCORE;
     
-    if (pos.is_checked[pos.to_move]) {
+    if (in_check) {
         moves = pos.generate_moves();
     }
     else {
@@ -227,6 +225,12 @@ static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, 
 
     for (int move_index = 0; move_index < moves.count; ++move_index) {
         Move mv = select_move(moves, move_scores, move_index);
+
+        bool quiet = move_captured_piece(mv) == PIECE_NONE;
+
+        if (!in_check && !quiet && capture_see(pos, mv) < 0) {
+            continue;
+        }
 
         push_move(s, pos, mv, ss);
 
