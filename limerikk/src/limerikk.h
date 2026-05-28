@@ -16,9 +16,6 @@
 
 constexpr size_t _ACCUMULATOR_PERSP_SIZE = 64;
 
-constexpr size_t TT_SIZE = (1 << 20);
-constexpr uint64_t TT_MASK = TT_SIZE - 1;
-
 float nnue_infer(std::span<uint64_t> bbs);
 
 using Clock = std::chrono::steady_clock;
@@ -269,6 +266,14 @@ struct SearchMetrics {
     int sel_depth = 0;
 };
 
+struct TTEntry {
+    uint64_t hash;
+    Move move;
+};
+
+constexpr size_t TT_SIZE = (1 << 20);
+constexpr size_t TT_MASK = TT_SIZE - 1;
+
 struct SearchContext {
     SearchMetrics* metrics;
     bool exited = false;
@@ -276,12 +281,17 @@ struct SearchContext {
     Budgeter* budgeter;
     std::atomic<bool> should_stop = false;
 
+    TTEntry tt[TT_SIZE]{};
+
     SearchContext(Budgeter* budgeter)
         : budgeter(budgeter)
     {
     }
 
     bool exit_on_node();
+
+    TTEntry* tt_query(uint64_t hash);
+    void tt_write(uint64_t hash, Move move);
 };
 
 

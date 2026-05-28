@@ -7,6 +7,7 @@
 
 #include "limerikk.h"
 
+constexpr int32_t HASH_MOVE_SCORE = 300000;
 constexpr int32_t CAPTURE_BASE    = 200000;
 constexpr int32_t QUIET_MOVE_BASE = 100000;
 
@@ -24,6 +25,24 @@ bool SearchContext::exit_on_node() {
     }
 
     return exited;
+}
+
+TTEntry* SearchContext::tt_query(uint64_t hash) {
+    size_t index = hash & TT_MASK;
+
+    if (tt[index].hash == hash) {
+        return &tt[index];
+    }
+
+    return nullptr;
+}
+
+void SearchContext::tt_write(uint64_t hash, Move move) {
+    size_t index = hash & TT_MASK;
+
+    TTEntry& e = tt[index];
+    e.hash = hash;
+    e.move = move;
 }
 
 
@@ -105,7 +124,7 @@ static int32_t mvv_lva(const Position& pos, Move mv) {
     return piece_value_table[captured]*100 - piece_value_table[moving];
 }
 
-static MoveScores score_moves(const Position& pos, const MoveList& moves) {
+static MoveScores score_moves(const Position& pos, const MoveList& moves, Move hash_move) {
     MoveScores scores{};
 
     for (int i = 0; i < moves.count; ++i) {
@@ -114,7 +133,10 @@ static MoveScores score_moves(const Position& pos, const MoveList& moves) {
 
         int32_t score;
 
-        if (quiet) {
+        if (mv == hash_move) {
+            score = HASH_MOVE_SCORE;
+        }
+        else if (quiet) {
             score = QUIET_MOVE_BASE;
         }
         else {
@@ -166,6 +188,19 @@ static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, 
         return 0;
     }
 
+
+
+    Move hash_move = NULL_MOVE;
+
+    {
+        TTEntry* e = s.tt_query(pos.zobrist);
+        if (e) {
+            hash_move = e->move;
+        }
+    }
+
+
+
     MoveList moves;
 
     int32_t best_score = -INF_SCORE;
@@ -182,9 +217,10 @@ static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, 
         return best_score;
     }
 
-    MoveScores move_scores = score_moves(pos, moves);
+    MoveScores move_scores = score_moves(pos, moves, hash_move);
 
     int legal_move_index = 0;
+    Move best_move = NULL_MOVE;
 
     for (int move_index = 0; move_index < moves.count; ++move_index) {
         Move mv = select_move(moves, move_scores, move_index);
@@ -204,6 +240,7 @@ static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, 
 
         if (score > alpha) {
             alpha = score;
+            best_move = mv;
         }
 
         if (alpha >= beta) {
@@ -211,6 +248,8 @@ static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, 
             s.metrics->beta_cutoff_count++;
 
             pop_move(pos, ss);
+
+            s.tt_write(pos.zobrist, mv);
 
             return best_score;
         }
@@ -223,6 +262,8 @@ static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, 
     if (legal_move_index == 0 && pos.is_checked[pos.to_move]) {
         return -MATE_SCORE + ply;
     }
+
+    s.tt_write(pos.zobrist, best_move);
 
     return best_score;
 }
@@ -253,9 +294,18 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
     }
 
 
+    Move hash_move = NULL_MOVE;
+
+    {
+        TTEntry* e = s.tt_query(pos.zobrist);
+        if (e) {
+            hash_move = e->move;
+        }
+    }
+
 
     MoveList moves = pos.generate_moves();
-    MoveScores move_scores = score_moves(pos, moves);
+    MoveScores move_scores = score_moves(pos, moves, hash_move);
 
     int32_t best_score = -INF_SCORE;
     Move best_move = NULL_MOVE;
@@ -289,6 +339,8 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
 
             pop_move(pos, ss);
 
+            s.tt_write(pos.zobrist, mv);
+
             return best_score;
         }
 
@@ -305,6 +357,8 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
             return 0;
         }
     }
+
+    s.tt_write(pos.zobrist, best_move);
 
     if (best_move_out) {
         *best_move_out = best_move;
