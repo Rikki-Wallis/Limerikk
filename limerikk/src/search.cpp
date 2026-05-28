@@ -30,7 +30,10 @@ bool SearchContext::exit_on_node() {
 TTEntry* SearchContext::tt_query(uint64_t hash) {
     size_t index = hash & TT_MASK;
 
+    metrics->tt_queries++;
+
     if (tt[index].hash == hash) {
+        metrics->tt_matches++;
         return &tt[index];
     }
 
@@ -426,6 +429,7 @@ Move Position::best_move(SearchContext& s, int depth, bool enable_uci_info, int6
         stats->time = float(double(std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - start).count())/1000000.0);
         stats->mean_cutoff_index = float(metrics.beta_cutoff_index_sum)/float(metrics.beta_cutoff_count);
         stats->sel_depth = metrics.sel_depth;
+        stats->tt_hit_rate = float(metrics.tt_matches)/float(metrics.tt_queries);
     }
 
     s.metrics = nullptr;

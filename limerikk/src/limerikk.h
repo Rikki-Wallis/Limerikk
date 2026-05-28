@@ -249,6 +249,7 @@ struct SearchStatistics {
     int qnodes;
     float time;
     int sel_depth;
+    float tt_hit_rate;
     float mean_cutoff_index;
 };
 
@@ -262,6 +263,9 @@ struct SearchMetrics {
 
     int beta_cutoff_index_sum = 0;
     int beta_cutoff_count = 0;
+
+    int tt_queries = 0;
+    int tt_matches = 0;
 
     int sel_depth = 0;
 };

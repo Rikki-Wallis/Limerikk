@@ -20,6 +20,7 @@ int main() {
         print("  nps: {:.2f}M\n", float(stats.nodes)/stats.time/1000000);
         print("  ebf: {:.2f}\n", std::exp(std::log(float(stats.nodes))/float(depth)));
         print("  sel-depth: {}\n", stats.sel_depth);
+        print("  tt-hit: {:.2f}%\n", stats.tt_hit_rate * 100.0f);
         print("\n");
     }
 }
