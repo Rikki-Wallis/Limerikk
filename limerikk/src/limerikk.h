@@ -278,6 +278,12 @@ struct TTEntry {
 constexpr size_t TT_SIZE = (1 << 20);
 constexpr size_t TT_MASK = TT_SIZE - 1;
 
+struct HistoryTable {
+    int16_t data[2][64][64];
+
+    void update(int side, int from, int to, int16_t bonus);
+};
+
 struct SearchContext {
     SearchMetrics* metrics;
     bool exited = false;
@@ -286,6 +292,7 @@ struct SearchContext {
     std::atomic<bool> should_stop = false;
 
     TTEntry tt[TT_SIZE]{};
+    HistoryTable history{};
 
     SearchContext(Budgeter* budgeter)
         : budgeter(budgeter)
