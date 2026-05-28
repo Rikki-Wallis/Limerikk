@@ -5,7 +5,7 @@
 int main() {
     std::unique_ptr<SearchContext> ctx = std::make_unique<SearchContext>(&null_budgeter);
 
-    for (int depth = 1; depth <= 14; ++depth) {
+    for (int depth = 1; depth <= 4; ++depth) {
         Position pos = *Position::parse_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1");
 
         SearchStatistics stats;
@@ -19,12 +19,7 @@ int main() {
         print("  mean-cutoff: {:.2f}\n", stats.mean_cutoff_index);
         print("  nps: {:.2f}M\n", float(stats.nodes)/stats.time/1000000);
         print("  ebf: {:.2f}\n", std::exp(std::log(float(stats.nodes))/float(depth)));
-        print("  tt-hit: {:.2f}%\n", stats.tt_hit_rate*100.0f);
-        print("  nmp-cutoff: {:.2f}%\n", stats.nmp_cutoff_rate*100.0f);
-        print("  mean-lmr: {:.2f}\n", stats.mean_lmr);
-        print("  expansions: {:.2f}\n", stats.expansions);
         print("  sel-depth: {}\n", stats.sel_depth);
-        print("  reduced-re-search-rate: {:.2f}%\n", stats.reduced_re_search_rate * 100.0f);
         print("\n");
     }
 }

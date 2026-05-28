@@ -251,40 +251,11 @@ struct SearchStatistics {
     int nodes;
     int qnodes;
     float time;
-    float mean_cutoff_index;
-    float tt_hit_rate;
-    float nmp_cutoff_rate;
-    float mean_lmr;
-    float expansions;
     int sel_depth;
-    float reduced_re_search_rate;
-};
-
-enum TTType {
-    TT_PV,
-    TT_ALL,
-    TT_CUT
-};
-
-struct ContinuationTable {
-    int16_t table[2][NUM_PIECE_TYPES][64];
-
-    void update(int side, Piece piece, int to, int32_t bonus);
-};
-
-struct TTEntry {
-    uint64_t hash;
-    TTType type;
-    Move best_move;
-    int32_t _score;
-    int depth;
-
-    void write(uint64_t hash, TTType ty, Move move, int32_t score, int depth, int ply);
-    int32_t score(int ply);
+    float mean_cutoff_index;
 };
 
 struct SearchEntry {
-    ContinuationTable* cont_hist;
     Move move;
 };
 
@@ -295,19 +266,7 @@ struct SearchMetrics {
     int beta_cutoff_index_sum = 0;
     int beta_cutoff_count = 0;
 
-    int tt_attempts = 0;
-    int tt_hits = 0;
-
-    int nmp_attempts = 0;
-    int nmp_cutoffs = 0;
-
-    int lmr_count = 0;
-    int lmr_sum = 0;
-
     int sel_depth = 0;
-
-    int reduced_searches = 0;
-    int reduced_re_searches = 0;
 };
 
 struct SearchContext {
@@ -317,34 +276,12 @@ struct SearchContext {
     Budgeter* budgeter;
     std::atomic<bool> should_stop = false;
 
-    ContinuationTable history = {};
-    ContinuationTable cont_history[2][NUM_PIECE_TYPES][64] = {};
-    Move killers[MAX_DEPTH][2] = {};
-    TTEntry tt[TT_SIZE]{};
-
     SearchContext(Budgeter* budgeter)
         : budgeter(budgeter)
     {
     }
 
-    void register_killer(int ply, Move mv);
-
-    void update_histories(int side, Piece piece, int to, int16_t bonus, SearchEntry* ss, int ply);
     bool exit_on_node();
-
-    template<bool Stats>
-    TTEntry& tt_query(uint64_t hash) {
-        size_t index = hash & TT_MASK;
-
-        TTEntry& e = tt[index];
-
-        if constexpr (Stats) {
-            metrics->tt_attempts++;
-            metrics->tt_hits += e.hash == hash;
-        }
-
-        return e;
-    }
 };
 
 
