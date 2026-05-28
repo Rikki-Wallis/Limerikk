@@ -11,6 +11,8 @@ constexpr int32_t HASH_MOVE_SCORE = 300000;
 constexpr int32_t CAPTURE_BASE    = 200000;
 constexpr int32_t QUIET_MOVE_BASE = 100000;
 
+constexpr int16_t MAX_HISTORY     = 30000;
+
 bool SearchContext::exit_on_node() {
     if (should_stop) {
         exited = true;
@@ -48,6 +50,10 @@ void SearchContext::tt_write(uint64_t hash, Move move) {
     e.move = move;
 }
 
+void HistoryTable::update(int side, int from, int to, int16_t bonus) {
+    int16_t b = std::clamp(bonus, int16_t(-MAX_HISTORY), MAX_HISTORY);
+    data[side][from][to] += b * data[side][from][to] * std::abs(b) / MAX_HISTORY;
+}
 
 static int32_t see(const Position& pos, int sq, int side, Piece cur_piece, uint64_t occupancy) {
     int32_t value = 0;
@@ -127,7 +133,7 @@ static int32_t mvv_lva(const Position& pos, Move mv) {
     return piece_value_table[captured]*100 - piece_value_table[moving];
 }
 
-static MoveScores score_moves(const Position& pos, const MoveList& moves, Move hash_move) {
+static MoveScores score_moves(const Position& pos, SearchContext& s, const MoveList& moves, Move hash_move) {
     MoveScores scores{};
 
     for (int i = 0; i < moves.count; ++i) {
@@ -141,6 +147,7 @@ static MoveScores score_moves(const Position& pos, const MoveList& moves, Move h
         }
         else if (quiet) {
             score = QUIET_MOVE_BASE;
+            score += s.history.data[move_side(mv)][move_from(mv)][move_to(mv)];
         }
         else {
             score = CAPTURE_BASE;
@@ -218,7 +225,7 @@ static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, 
         return best_score;
     }
 
-    MoveScores move_scores = score_moves(pos, moves, hash_move);
+    MoveScores move_scores = score_moves(pos, s, moves, hash_move);
 
     int legal_move_index = 0;
     Move best_move = NULL_MOVE;
@@ -312,7 +319,7 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
 
 
     MoveList moves = pos.generate_moves();
-    MoveScores move_scores = score_moves(pos, moves, hash_move);
+    MoveScores move_scores = score_moves(pos, s, moves, hash_move);
 
     int32_t best_score = -INF_SCORE;
     Move best_move = NULL_MOVE;
@@ -321,6 +328,8 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
 
     for (int move_index = 0; move_index < moves.count; ++move_index) {
         Move mv = select_move(moves, move_scores, move_index);
+
+        bool quiet = move_captured_piece(mv) == PIECE_NONE;
 
         push_move(s, pos, mv, ss);
 
@@ -345,6 +354,11 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
             s.metrics->beta_cutoff_count++;
 
             pop_move(pos, ss);
+
+            if (quiet) {
+                int16_t history_bonus = int16_t(300 * depth - 250);
+                s.history.update(side, move_from(mv), move_to(mv), history_bonus);
+            }
 
             s.tt_write(pos.zobrist, mv);
 
