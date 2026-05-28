@@ -146,6 +146,10 @@ static Move select_move(MoveList& moves, MoveScores& scores, int index) {
 }
 
 static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, int32_t beta, SearchEntry* ss) {
+    if (ply > 4) {
+        return pos.signed_eval();
+    }
+
     int side = pos.to_move;
 
     s.metrics->qnode_count++;
@@ -245,8 +249,7 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
     }
 
     if (depth <= 0) {
-        return pos.signed_eval();
-        //return qsearch(pos, s, ply, alpha, beta, ss);
+        return qsearch(pos, s, ply, alpha, beta, ss);
     }
 
 
