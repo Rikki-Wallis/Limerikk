@@ -7,7 +7,6 @@
 #include <atomic>
 #include <vector>
 #include <fstream>
-#include <iostream>
 #include <cstdio>
 
 #include "common.h"

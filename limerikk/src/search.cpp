@@ -1,6 +1,5 @@
 #include <array>
 #include <cmath>
-#include <iostream>
 #include <algorithm>
 #include <unordered_set>
 #include <memory>
