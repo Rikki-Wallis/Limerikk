@@ -1,6 +1,7 @@
 #include <thread>
 #include <iostream>
 #include <atomic>
+#include <cmath>
 
 #include "limerikk.h"
 
