@@ -7,6 +7,8 @@
 
 #include "limerikk.h"
 
+// bruh
+
 constexpr int32_t HASH_MOVE_SCORE = 300000;
 constexpr int32_t CAPTURE_BASE    = 200000;
 constexpr int32_t QUIET_MOVE_BASE = 100000;
