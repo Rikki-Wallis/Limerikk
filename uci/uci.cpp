@@ -1,5 +1,4 @@
 #include <thread>
-#include <iostream>
 #include <atomic>
 #include <cmath>
 
@@ -93,13 +92,13 @@ static void parse_position(const std::string& line, Position* pos) {
         std::string fen = pos_part.substr(pos_part.find("fen") + 4);
         auto pos_result = Position::parse_fen(fen);
         if (!pos_result.has_value()) {
-            std::cout << "Invalid FEN " << fen << "\n";
+            print("Invalid FEN {}\n", fen);
             return;
         }
         *pos = std::move(*pos_result);
     }
     else {
-        std::cout << "Unrecognized position type\n";
+        print("Unrecognized position type.\n");
         return;
     }
 
@@ -112,14 +111,14 @@ static void parse_position(const std::string& line, Position* pos) {
         std::optional<Move> mv_result = parse_uci_move(pos, move);
 
         if (!mv_result.has_value()) {
-            std::cout << "Illegal move " << move << "\n";
+            print("Illegal move {}\n", move);
             break;
         }
 
         Move mv = *mv_result;
 
         if (!pos->is_move_legal_slow(mv)) {
-            std::cout << "Illegal move " << move << "\n";
+            print("Illegal move {}\n", move);
             break;
         }
         pos->make_move(mv);
@@ -258,10 +257,23 @@ int bench_main() {
     return 0;
 }
 
-int main(int argc, char** argv) {
-    std::ios::sync_with_stdio(false);
-    std::cout.setf(std::ios::unitbuf);
+std::string strip(const std::string& str) {
+    const std::string WHITESPACE = " \n\r\t\f\v";
+    
+    // Find the first non-whitespace character
+    size_t first = str.find_first_not_of(WHITESPACE);
+    if (first == std::string::npos) {
+        return ""; // The string is entirely whitespace
+    }
+    
+    // Find the last non-whitespace character
+    size_t last = str.find_last_not_of(WHITESPACE);
+    
+    // Extract the substring containing only the valid characters
+    return str.substr(first, (last - first + 1));
+}
 
+int main(int argc, char** argv) {
     if (argc > 1 && std::string(argv[1]) == "bench") {
         return bench_main();
     }
@@ -272,17 +284,20 @@ int main(int argc, char** argv) {
     std::unique_ptr<SearchContext> ctx = std::make_unique<SearchContext>(&null_budgeter);
 
     Position position = *Position::parse_fen(START_FEN);
-    
-    while (std::getline(std::cin, line)) {
+
+    char buf[4096];
+    while (fgets(buf, sizeof(buf), stdin)) {
+        std::string line = strip(std::string(buf));
+
         if (line == "uci") {
-            std::cout << "id name limerikk\n";
-            std::cout << "id author Jeremy and Rikki\n";
-            std::cout << "option name Threads type spin default 1 min 1 max 1\n";
-            std::cout << "option name Hash type spin default 16 min 1 max 1024\n";
-            std::cout << "uciok\n";
+            print("id name limerikk\n");
+            print("id author Jeremy and Rikki\n");
+            print("option name Threads type spin default 1 min 1 max 1\n");
+            print("option name Hash type spin default 16 min 1 max 1024\n");
+            print("uciok\n");
         }
         else if (line == "isready") {
-            std::cout << "readyok\n";
+            print("readyok\n");
         }
         else if (line == "ucinewgame") {
             position = *Position::parse_fen(START_FEN);
@@ -318,7 +333,7 @@ int main(int argc, char** argv) {
                 ctx->budgeter = &budgeter;
 
                 Move move = position.best_move(*ctx, depth, true);
-                std::cout << "bestmove " << to_uci_move(move) << "\n";
+                print("bestmove {}\n", to_uci_move(move));
             });
         }
         else if (line == "stop") {
@@ -329,7 +344,7 @@ int main(int argc, char** argv) {
             }
         }
         else {
-            std::cout << "Unrecognized command" << line << "\n";
+            print("Unrecognized command {}\n", line);
         }
     }
 
