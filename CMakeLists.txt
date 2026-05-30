@@ -12,9 +12,13 @@ if(MSVC)
     add_compile_options(
         /W4 /WX /arch:AVX2 /wd4324 /wd4505
     )
-else()
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     add_compile_options(
         -Wall -Wextra -Wpedantic -Werror -Wimplicit-int-conversion -Wno-unused-const-variable -march=native -Wno-c2y-extensions -Wno-unused-function
+    )
+else()
+    add_compile_options(
+        -Wall -Wextra -Wpedantic -Werror -Wno-unused-const-variable -march=native -Wno-unused-function
     )
 endif()
 
