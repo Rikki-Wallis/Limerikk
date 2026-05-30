@@ -277,6 +277,8 @@ int main(int argc, char** argv) {
         if (line == "uci") {
             std::cout << "id name limerikk\n";
             std::cout << "id author Jeremy and Rikki\n";
+            std::cout << "option name Threads type spin default 1 min 1 max 1\n";
+            std::cout << "option name Hash type spin default 16 min 1 max 1024\n";
             std::cout << "uciok\n";
         }
         else if (line == "isready") {
