@@ -5,6 +5,7 @@
 #include "limerikk.h"
 
 static const char* START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+//static const char* KIWIPETE_FEN = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
 
 static std::optional<Move> parse_uci_move(Position* pos, const std::string& move) {
     int from_f = move[0] - 'a';
@@ -231,9 +232,38 @@ private:
     TimePoint _start;
 };
 
-int main() {
+int bench_main() {
+    int nodes = 0;
+    TimePoint start = Clock::now();
+
+    for (auto fen : {START_FEN/*, KIWIPETE_FEN*/}) {
+        std::unique_ptr<SearchContext> s = std::make_unique<SearchContext>(&null_budgeter);
+
+        Position position = *Position::parse_fen(fen);
+
+        SearchStatistics stats;
+        position.best_move(*s, 6, true, nullptr, &stats);
+
+        nodes += stats.nodes;
+    }
+
+    long long ms = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start).count();
+    double s = double(ms)/1000.0;
+
+    double nps = double(nodes)/s; 
+
+    print("{} nodes {} nps\n", nodes, int(nps));
+
+    return 0;
+}
+
+int main(int argc, char** argv) {
     std::ios::sync_with_stdio(false);
     std::cout.setf(std::ios::unitbuf);
+
+    if (argc > 1 && std::string(argv[1]) == "bench") {
+        return bench_main();
+    }
 
     std::string line;
     std::thread thread;

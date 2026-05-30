@@ -324,12 +324,19 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
     int32_t best_score = -INF_SCORE;
     Move best_move = NULL_MOVE;
 
+    Move quiets[256];
+    int quiet_count = 0;
+
     int legal_move_index = 0;
 
     for (int move_index = 0; move_index < moves.count; ++move_index) {
         Move mv = select_move(moves, move_scores, move_index);
 
         bool quiet = move_captured_piece(mv) == PIECE_NONE;
+
+        if (quiet) {
+            quiets[quiet_count++] = mv;
+        }
 
         push_move(s, pos, mv, ss);
 
@@ -358,6 +365,10 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
             if (quiet) {
                 int16_t history_bonus = int16_t(300 * depth - 250);
                 s.history.update(side, move_from(mv), move_to(mv), history_bonus);
+
+                for (int i = quiet_count-2; i >= 0; --i) {
+                    s.history.update(side, move_from(quiets[i]), move_to(quiets[i]), int16_t(-history_bonus));
+                }
             }
 
             s.tt_write(pos.zobrist, mv);
