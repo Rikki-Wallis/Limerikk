@@ -52,7 +52,7 @@ void SearchContext::tt_write(uint64_t hash, Move move) {
 
 void HistoryTable::update(int side, int from, int to, int16_t bonus) {
     int16_t b = std::clamp(bonus, int16_t(-MAX_HISTORY), MAX_HISTORY);
-    data[side][from][to] += b * data[side][from][to] * std::abs(b) / MAX_HISTORY;
+    data[side][from][to] += b - data[side][from][to] * std::abs(b) / MAX_HISTORY;
 }
 
 static int32_t see(const Position& pos, int sq, int side, Piece cur_piece, uint64_t occupancy) {
@@ -138,7 +138,7 @@ static MoveScores score_moves(const Position& pos, SearchContext& s, const MoveL
 
     for (int i = 0; i < moves.count; ++i) {
         Move mv = moves.data[i];
-        bool quiet = move_captured_piece(mv);
+        bool quiet = move_captured_piece(mv) == PIECE_NONE;
 
         int32_t score;
 
