@@ -87,7 +87,7 @@ enum PositionFlags {
     POSITION_FLAG_BLACK_KCASTLE = (1 << 3),
 };
 
-static const char* piece_alg_table[NUM_PIECE_TYPES] = {
+inline constexpr const char* piece_alg_table[NUM_PIECE_TYPES] = {
     "uninitialized",
     "",
     "R",
