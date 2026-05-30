@@ -216,8 +216,7 @@ public:
     virtual bool should_exit(int node_count) const override {
         int64_t elapsed_microseconds = std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - _start).count();
         double elapsed_s = double(elapsed_microseconds)/1000000.0;
-        (void)_hard_limit;
-        return node_count >= _nodes || elapsed_s >= _soft_limit;
+        return node_count >= _nodes || elapsed_s >= _hard_limit;
     }
 
     virtual bool should_start_next_iteration() const override {
