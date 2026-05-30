@@ -250,6 +250,18 @@ static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, 
 
         int32_t score = -qsearch(pos, s, ply+1, -beta, -alpha, ss+1);
 
+        if (s.exited) {
+            pop_move(pos, ss);
+            return 0;
+        }
+
+        if (s.exited) {
+            return 0;
+        }
+        if (s.exited) {
+            return 0;
+        }
+
         if (score > best_score) {
             best_score = score;
         }
@@ -348,6 +360,11 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
         }
 
         int32_t score = -search(pos, s, depth-1, ply+1, -beta, -alpha, ss+1);
+
+        if (s.exited) {
+            pop_move(pos, ss);
+            return 0;
+        }
 
         if (score > best_score) {
             best_score = score;
