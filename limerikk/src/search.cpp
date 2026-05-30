@@ -255,12 +255,6 @@ static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, 
             return 0;
         }
 
-        if (s.exited) {
-            return 0;
-        }
-        if (s.exited) {
-            return 0;
-        }
 
         if (score > best_score) {
             best_score = score;
