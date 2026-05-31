@@ -481,7 +481,7 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
         if (!pv_node || (legal_move_index > 0)) {
             score = -search(pos, s, depth-1-lmr, ply+1, -(alpha+1), -alpha, ss+1);
 
-            if (score > alpha) {
+            if (lmr > 0 && score > alpha) {
                 score = -search(pos, s, depth-1, ply+1, -(alpha+1), -alpha, ss+1);
             }
         }
