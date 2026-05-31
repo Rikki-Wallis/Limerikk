@@ -460,16 +460,34 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
 
 
 
+        // calculate late move reduction
+
+        bool can_lmr = move_index > 3 && depth > 3 && !in_check && quiet;
+        int lmr = 0;
+
+        if (can_lmr) {
+            float frac = 0.5f + std::log(float(depth)) * std::log(float(move_index)) / 4.0f;
+            lmr = int(std::round(frac));
+            lmr = std::max(lmr, 0);
+        }
+
+
+
+
         // perform principal variation search
 
         int32_t score = 0;
 
         if (!pv_node || (move_index > 0)) {
-            score = -search(pos, s, depth-1, ply+1, -(alpha+1), -alpha, ss+1);
+            score = -search(pos, s, depth-1-lmr, ply+1, -(alpha+1), -alpha, ss+1);
+
+            if (score > alpha) {
+                score = -search(pos, s, depth-1, ply+1, -(alpha+1), -alpha, ss+1);
+            }
         }
 
         if (pv_node && (move_index == 0 || score > alpha)) {
-            score = -search(pos, s, depth-1, ply+1, -beta, -alpha, ss+1);
+            score = -search(pos, s, depth-1-lmr, ply+1, -beta, -alpha, ss+1);
         }
 
         if (s.exited) {
