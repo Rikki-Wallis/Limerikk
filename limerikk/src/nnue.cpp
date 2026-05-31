@@ -165,13 +165,13 @@ float nnue_infer(std::span<uint64_t> bbs) {
     return forward_accumulator(accumulator[0]);
 }
 
-inline int64_t wdl_to_centipawns(float wdl) {
+inline int32_t wdl_to_centipawns(float wdl) {
     wdl = std::clamp(wdl, 1e-7f, 1.0f - 1e-7f);
-    int64_t centipawns = int64_t(400.0f * logf(wdl/(1.0f-wdl)));
+    int32_t centipawns = int32_t(400.0f * logf(wdl/(1.0f-wdl)));
     return centipawns;
 }
 
-int64_t Position::nnue_eval() const {
+int32_t Position::nnue_eval() const {
     auto bbs = to_bitboards();
     float wdl = nnue_infer(bbs);
     return wdl_to_centipawns(wdl);

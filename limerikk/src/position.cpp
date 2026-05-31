@@ -12,7 +12,6 @@ enum SideFlags {
     SIDE_FLAG_CAN_CASTLE_QUEENSIDE = (1 << 1),
 };
 
-
 uint64_t Side::all() const {
     return bb[PIECE_PAWN] | bb[PIECE_ROOK] | bb[PIECE_KNIGHT] | bb[PIECE_BISHOP] | bb[PIECE_QUEEN] | bb[PIECE_KING];
 }
@@ -402,30 +401,6 @@ void Position::verify_integrity() const {
     assert(memcmp(map, piece_at, sizeof(map)) == 0);
 }
 
-int64_t Position::non_pawn_value(int side) const {
-    int64_t value = 0;
-
-    for (int p = PIECE_PAWN + 1; p < NUM_PIECE_TYPES; ++p) {
-        int count = std::popcount(sides[side].bb[p]);
-        value += piece_value_table[p] * count;
-    }
-
-    return value;
-}
-
-void Position::reset_benchmarking_statistics() {
-    max_ply = 0;
-    node_count = 0;
-    qnode_count = 0;
-    pv_node_count = 0;
-    beta_cutoffs = 0;
-    null_prunes = 0;
-    cutoff_index_count = 0;
-    cutoff_index_sum = 0;
-    reduced_searches = 0;
-    reduced_fail_high = 0;
-}
-
 int Position::get_king_sq(int side) const {
     assert(std::popcount(sides[side].bb[PIECE_KING]) == 1);
     return std::countr_zero(sides[side].bb[PIECE_KING]);
@@ -508,7 +483,23 @@ std::array<uint64_t, 12> Position::to_bitboards() const {
     return bbs;
 }
 
-bool NullBudgeter::should_exit(struct Position& pos) const {
-    (void)pos;
+bool NullBudgeter::should_exit(int node_count) const {
+    (void)node_count;
     return false;
+}
+
+bool NullBudgeter::should_start_next_iteration() const {
+    return true;
+}
+
+int32_t Position::non_pawn_material() const {
+    return std::popcount(sides[WHITE].bb[PIECE_KNIGHT]) * piece_value_table[PIECE_KNIGHT] +
+           std::popcount(sides[WHITE].bb[PIECE_BISHOP]) * piece_value_table[PIECE_BISHOP] +
+           std::popcount(sides[WHITE].bb[PIECE_ROOK])   * piece_value_table[PIECE_ROOK] +
+           std::popcount(sides[WHITE].bb[PIECE_QUEEN])  * piece_value_table[PIECE_QUEEN] +
+
+           std::popcount(sides[BLACK].bb[PIECE_KNIGHT]) * piece_value_table[PIECE_KNIGHT] +
+           std::popcount(sides[BLACK].bb[PIECE_BISHOP]) * piece_value_table[PIECE_BISHOP] +
+           std::popcount(sides[BLACK].bb[PIECE_ROOK])   * piece_value_table[PIECE_ROOK] +
+           std::popcount(sides[BLACK].bb[PIECE_QUEEN])  * piece_value_table[PIECE_QUEEN];
 }

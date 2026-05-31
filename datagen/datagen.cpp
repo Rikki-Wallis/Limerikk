@@ -28,6 +28,7 @@ static std::pair<GameResult, BinpackGame> run_match() {
 
     for (;;) {
         Position pos = *Position::parse_fen(START_FEN);
+        std::unique_ptr<SearchContext> ctx = std::make_unique<SearchContext>(&null_budgeter);
 
         BinpackGame bpg{};
 
@@ -59,12 +60,11 @@ static std::pair<GameResult, BinpackGame> run_match() {
                     bpg.start = pos.to_bitboards();
                 }
 
-                std::atomic<bool> should_stop = false;
-
                 NodeBudgeter budgeter(NODE_BUDGET);
+                ctx->budgeter = &budgeter;
 
                 int64_t score= 0;
-                Move mv= pos.best_move(20, should_stop, &budgeter, {}, false, &score);
+                Move mv= pos.best_move(*ctx, 20, false, &score);
 
                 if (pos.to_move == BLACK) {
                     score *= -1;

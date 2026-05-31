@@ -1,10 +1,11 @@
 #include <thread>
-#include <iostream>
 #include <atomic>
+#include <cmath>
 
 #include "limerikk.h"
 
 static const char* START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+//static const char* KIWIPETE_FEN = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
 
 static std::optional<Move> parse_uci_move(Position* pos, const std::string& move) {
     int from_f = move[0] - 'a';
@@ -91,13 +92,13 @@ static void parse_position(const std::string& line, Position* pos) {
         std::string fen = pos_part.substr(pos_part.find("fen") + 4);
         auto pos_result = Position::parse_fen(fen);
         if (!pos_result.has_value()) {
-            std::cout << "Invalid FEN " << fen << "\n";
+            print("Invalid FEN {}\n", fen);
             return;
         }
         *pos = std::move(*pos_result);
     }
     else {
-        std::cout << "Unrecognized position type\n";
+        print("Unrecognized position type.\n");
         return;
     }
 
@@ -110,14 +111,14 @@ static void parse_position(const std::string& line, Position* pos) {
         std::optional<Move> mv_result = parse_uci_move(pos, move);
 
         if (!mv_result.has_value()) {
-            std::cout << "Illegal move " << move << "\n";
+            print("Illegal move {}\n", move);
             break;
         }
 
         Move mv = *mv_result;
 
         if (!pos->is_move_legal_slow(mv)) {
-            std::cout << "Illegal move " << move << "\n";
+            print("Illegal move {}\n", move);
             break;
         }
         pos->make_move(mv);
@@ -171,109 +172,179 @@ static int allocate_time(int time, int inc) {
     return time/40 + inc/2;
 }
 
-static int calculate_move_time(const GoParams& p, int to_move) {
+static std::pair<double, double> calculate_move_time(const GoParams& p, int to_move) {
     if (p.infinite) {
-        return INT32_MAX;
+        return {INFINITY, INFINITY};
     }
 
     if (p.movetime) {
-        return *p.movetime;
+        double t = double(*p.movetime)/1000.0;
+        return {t, t};
     }
 
-    int time = to_move == WHITE ? p.wtime.value_or(0) : p.btime.value_or(0);
-    int inc = to_move == WHITE ? p.winc.value_or(0) : p.binc.value_or(0);
+    int time_ms = to_move == WHITE ? p.wtime.value_or(0) : p.btime.value_or(0);
+    int inc_ms = to_move == WHITE ? p.winc.value_or(0) : p.binc.value_or(0);
+
+    double time = double(time_ms) / 1000.0;
+    double inc = double(inc_ms) / 1000.0;
 
     if (time == 0) {
-        return INT32_MAX;
+        return {INFINITY, INFINITY};
     }
 
-    return allocate_time(time, inc);
+    // need to allocate time
+
+    double soft = time / 40 + inc * 0.5;
+    soft *= 0.9;
+
+    double hard = std::min(soft * 4.0, time / 4);
+
+    return {soft, hard};
 }
 
 class UCIBudgeter : public Budgeter {
 public:
-    UCIBudgeter(int node_count, double seconds)
-        : _nodes(node_count), _seconds(seconds)
-    {}
+    UCIBudgeter(int node_count, double soft_limit, double hard_limit)
+        : _nodes(node_count), _soft_limit(soft_limit), _hard_limit(hard_limit)
+    {
+    }
 
     virtual void init() override {
         _start = Clock::now();
     }
 
-    virtual bool should_exit(Position& pos) const override {
+    virtual bool should_exit(int node_count) const override {
         int64_t elapsed_microseconds = std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - _start).count();
         double elapsed_s = double(elapsed_microseconds)/1000000.0;
-        return pos.node_count >= _nodes || elapsed_s >= _seconds;
+        return node_count >= _nodes || elapsed_s >= _hard_limit;
+    }
+
+    virtual bool should_start_next_iteration() const override {
+        int64_t elapsed_microseconds = std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - _start).count();
+        double elapsed_s = double(elapsed_microseconds)/1000000.0;
+        return elapsed_s < _soft_limit;
     }
 
 private:
     int _nodes;
-    double _seconds;
+    double _soft_limit;
+    double _hard_limit;
     TimePoint _start;
 };
 
-int main() {
-    std::ios::sync_with_stdio(false);
-    std::cout.setf(std::ios::unitbuf);
+int bench_main() {
+    int nodes = 0;
+    TimePoint start = Clock::now();
+
+    for (auto fen : {START_FEN/*, KIWIPETE_FEN*/}) {
+        std::unique_ptr<SearchContext> s = std::make_unique<SearchContext>(&null_budgeter);
+
+        Position position = *Position::parse_fen(fen);
+
+        SearchStatistics stats;
+        position.best_move(*s, 6, true, nullptr, &stats);
+
+        nodes += stats.nodes;
+    }
+
+    long long ms = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start).count();
+    double s = double(ms)/1000.0;
+
+    double nps = double(nodes)/s; 
+
+    print("{} nodes {} nps\n", nodes, int(nps));
+
+    return 0;
+}
+
+std::string strip(const std::string& str) {
+    const std::string WHITESPACE = " \n\r\t\f\v";
+    
+    // Find the first non-whitespace character
+    size_t first = str.find_first_not_of(WHITESPACE);
+    if (first == std::string::npos) {
+        return ""; // The string is entirely whitespace
+    }
+    
+    // Find the last non-whitespace character
+    size_t last = str.find_last_not_of(WHITESPACE);
+    
+    // Extract the substring containing only the valid characters
+    return str.substr(first, (last - first + 1));
+}
+
+int main(int argc, char** argv) {
+    if (argc > 1 && std::string(argv[1]) == "bench") {
+        return bench_main();
+    }
 
     std::string line;
     std::thread thread;
-    std::atomic<bool> should_stop = false;
+
+    std::unique_ptr<SearchContext> ctx = std::make_unique<SearchContext>(&null_budgeter);
 
     Position position = *Position::parse_fen(START_FEN);
-    
-    while (std::getline(std::cin, line)) {
+
+    char buf[4096];
+    while (fgets(buf, sizeof(buf), stdin)) {
+        std::string line = strip(std::string(buf));
+
         if (line == "uci") {
-            std::cout << "id name limerikk\n";
-            std::cout << "id author Jeremy and Rikki\n";
-            std::cout << "uciok\n";
+            print("id name limerikk\n");
+            print("id author Jeremy and Rikki\n");
+            print("option name Threads type spin default 1 min 1 max 1\n");
+            print("option name Hash type spin default 16 min 1 max 1024\n");
+            print("uciok\n");
         }
         else if (line == "isready") {
-            std::cout << "readyok\n";
+            print("readyok\n");
         }
         else if (line == "ucinewgame") {
             position = *Position::parse_fen(START_FEN);
+            ctx = std::make_unique<SearchContext>(&null_budgeter);
         }
         else if (line.starts_with("position")) {
             parse_position(line, &position);
         }
         else if (line == "quit") {
-            should_stop = true;
+            ctx->should_stop = true;
             if (thread.joinable()) {
                 thread.join();
             }
             return 0;
         }
         else if (line.starts_with("go")) {
-            should_stop = true;
+            ctx->should_stop = true;
             if (thread.joinable()) {
                 thread.join();
             }
 
             GoParams g = parse_go_command(line);
 
-            int time_ms = calculate_move_time(g, position.to_move);
-            double time_s = double(time_ms)/1000.0*0.95;
+            auto [soft_limit, hard_limit] = calculate_move_time(g, position.to_move);
 
             int node_budget = g.nodes.value_or(INT_MAX);
             int depth = g.depth.value_or(40);
 
-            should_stop = false;
+            ctx->should_stop = false;
             
-            thread = std::thread([&position, depth, &should_stop, time_s, node_budget](){
-                UCIBudgeter budgeter(node_budget, time_s);
-                Move move = position.think(depth, should_stop, &budgeter, {}, true);
-                std::cout << "bestmove " << to_uci_move(move) << "\n";
+            thread = std::thread([&position, depth, &ctx, soft_limit, hard_limit, node_budget](){
+                UCIBudgeter budgeter(node_budget, soft_limit, hard_limit);
+                ctx->budgeter = &budgeter;
+
+                Move move = position.best_move(*ctx, depth, true);
+                print("bestmove {}\n", to_uci_move(move));
             });
         }
         else if (line == "stop") {
-            should_stop = true;
+            ctx->should_stop = true;
+
             if (thread.joinable()) {
                 thread.join();
             }
         }
         else {
-            std::cout << "Unrecognized command" << line << "\n";
+            print("Unrecognized command {}\n", line);
         }
     }
 
