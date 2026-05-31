@@ -188,7 +188,7 @@ static MoveScores score_moves(const Position& pos, SearchContext& s, const MoveL
         Move mv = moves.data[i];
         bool quiet = move_captured_piece(mv) == PIECE_NONE;
 
-        int32_t score;
+        int32_t score = 0;
 
         if (mv == hash_move) {
             score = HASH_MOVE_SCORE;
@@ -442,7 +442,7 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
 
         // perform principal variation search
 
-        int32_t score;
+        int32_t score = 0;
 
         if (!pv_node || (move_index > 0)) {
             score = -search(pos, s, depth-1, ply+1, -(alpha+1), -alpha, ss+1);
