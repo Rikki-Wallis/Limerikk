@@ -231,8 +231,10 @@ static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, 
     int side = pos.to_move;
 
     bool in_check = pos.is_checked[side];
+    bool pv_node = beta > alpha + 1;
 
     s.metrics->qnode_count++;
+    s.metrics->pv_node_count += pv_node;
 
     if (s.exit_on_node()) {
         return 0;
@@ -256,7 +258,7 @@ static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, 
         if (e) {
             hash_move = e->move;
 
-            if (e->cutoff(0, ply, alpha, beta)) {
+            if (!pv_node && e->cutoff(0, ply, alpha, beta)) {
                 return e->score(ply);
             }
         }
@@ -350,6 +352,9 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
 
     s.metrics->sel_depth = std::max(s.metrics->sel_depth, ply);
 
+    bool pv_node = beta > alpha + 1;
+    s.metrics->pv_node_count += pv_node;
+
     if (best_move_out) {
         *best_move_out = NULL_MOVE;
     }
@@ -378,7 +383,7 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
         if (e) {
             hash_move = e->move;
 
-            if (e->cutoff(depth, ply, alpha, beta)) {
+            if (!pv_node && e->cutoff(depth, ply, alpha, beta)) {
                 if (e->kind == TT_EXACT) {
                     if (best_move_out) {
                         *best_move_out = e->move;
@@ -417,12 +422,29 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
             continue;
         }
 
-        int32_t score = -search(pos, s, depth-1, ply+1, -beta, -alpha, ss+1);
+
+
+        // perform principal variation search
+
+        int32_t score;
+
+        if (!pv_node || (move_index > 0)) {
+            score = -search(pos, s, depth-1, ply+1, -(alpha+1), -alpha, ss+1);
+        }
+
+        if (pv_node && (move_index == 0 || score > alpha)) {
+            score = -search(pos, s, depth-1, ply+1, -beta, -alpha, ss+1);
+        }
 
         if (s.exited) {
             pop_move(pos, ss);
             return 0;
         }
+
+
+
+
+
 
         if (score > best_score) {
             best_score = score;
@@ -532,6 +554,7 @@ Move Position::best_move(SearchContext& s, int depth, bool enable_uci_info, int6
     if (stats) {
         stats->nodes = metrics.node_count;
         stats->qnodes = metrics.qnode_count;
+        stats->pv_nodes = metrics.pv_node_count;
         stats->time = float(double(std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - start).count())/1000000.0);
         stats->mean_cutoff_index = float(metrics.beta_cutoff_index_sum)/float(metrics.beta_cutoff_count);
         stats->sel_depth = metrics.sel_depth;

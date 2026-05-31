@@ -246,6 +246,7 @@ struct Accumulator {
 struct SearchStatistics {
     int nodes;
     int qnodes;
+    int pv_nodes;
     float time;
     int sel_depth;
     float tt_hit_rate;
@@ -259,6 +260,7 @@ struct SearchEntry {
 struct SearchMetrics {
     int node_count = 0;
     int qnode_count = 0;
+    int pv_node_count = 0;
 
     int beta_cutoff_index_sum = 0;
     int beta_cutoff_count = 0;
