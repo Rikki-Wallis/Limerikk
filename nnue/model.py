@@ -14,8 +14,7 @@ class NNUE(nn.Module):
         super().__init__()
 
         self.l1 = nn.Linear(2*6*64, 64)
-        self.l2 = nn.Linear(128, 32)
-        self.l3 = nn.Linear(32, 1)
+        self.l2 = nn.Linear(128, 1)
 
     @torch.compiler.disable
     def feed_l1(self, features, indices):
@@ -31,7 +30,6 @@ class NNUE(nn.Module):
         a1 = torch.concat([a1w, a1b], dim=1)
         a1 = F.hardtanh(a1, 0, 1)
 
-        a2 = F.hardtanh(self.l2(a1), 0, 1)
-        a3 = F.sigmoid(self.l3(a2))
+        a2 = F.sigmoid(self.l2(a1))
 
-        return a3.squeeze(-1)
+        return a2.squeeze(-1)

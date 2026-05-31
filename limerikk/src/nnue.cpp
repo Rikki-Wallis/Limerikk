@@ -98,6 +98,7 @@ static float forward_accumulator(int16_t* RESTRICT accumulator) {
         a0[i] = scaled_crelu<int16_t, uint8_t, 255>(accumulator[i], int16_t(64));
     }
 
+    /*
     alignas(32) uint8_t a1[std::size(nnue_b1)];
 
     for (size_t i = 0; i < std::size(a1); ++i) {
@@ -109,8 +110,8 @@ static float forward_accumulator(int16_t* RESTRICT accumulator) {
             __m256i act = _mm256_load_si256((const __m256i*)&a0[j]);      // uint8
             __m256i w   = _mm256_load_si256((const __m256i*)&nnue_w1[i][j]); // int8
 
-            __m256i prod = _mm256_maddubs_epi16(act, w);  // uint8*int8 → int16 (saturating), 32 pairs
-            __m256i wide = _mm256_madd_epi16(prod, ones); // int16*1 → int32, 16 pairs summed
+            __m256i prod = _mm256_maddubs_epi16(act, w);  // uint8*int8 -> int16 (saturating), 32 pairs
+            __m256i wide = _mm256_madd_epi16(prod, ones); // int16*1 -> int32, 16 pairs summed
             sum = _mm256_add_epi32(sum, wide);
         }
 
@@ -140,11 +141,12 @@ static float forward_accumulator(int16_t* RESTRICT accumulator) {
 
         a1[i] = scaled_crelu<int32_t, uint8_t, 255>(value, 64*255);
     }
+    */
 
-    int32_t out = nnue_b2[0];
+    int32_t out = nnue_b1[0];
 
-    for (size_t j = 0; j < std::size(a1); ++j) {
-        out += int16_t(nnue_w2[0][j]) * int16_t(a1[j]);
+    for (size_t j = 0; j < std::size(a0); ++j) {
+        out += int16_t(nnue_w1[0][j]) * int16_t(a0[j]);
     }
 
     return scaled_sigmoid(out, 64*255);
