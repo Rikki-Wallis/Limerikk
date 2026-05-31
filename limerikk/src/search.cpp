@@ -462,11 +462,11 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
 
         // calculate late move reduction
 
-        bool can_lmr = move_index > 3 && depth > 3;
+        bool can_lmr = move_index > 3 && depth > 3 && !in_check;
         int lmr = 0;
 
         if (can_lmr) {
-            float frac = 0.5f + std::log(float(depth)) / std::log(float(move_index)) / 3.0f;
+            float frac = 0.5f + std::log(float(depth)) * std::log(float(move_index)) / 3.0f;
             lmr = int(std::round(frac));
             lmr = std::max(lmr, 0);
         }
