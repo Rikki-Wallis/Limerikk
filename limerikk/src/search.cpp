@@ -413,12 +413,12 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
 
     // null move pruning
 
-    bool can_nmp = depth > 6 && !in_check && pos.non_pawn_material() > 0 && !pv_node && allow_null_move;
+    bool can_nmp = depth > 3 && !in_check && pos.non_pawn_material() > 0 && !pv_node && allow_null_move;
 
     if (can_nmp) {
         push_move(s, pos, NULL_MOVE, ss);
 
-        int r = 3 + depth / 6;
+        int r = 3 + depth / 4;
         int32_t v = -search(pos, s, depth-r-1, ply+1, -beta, -(beta-1), ss+1, nullptr, false);
 
         pop_move(pos, ss);
