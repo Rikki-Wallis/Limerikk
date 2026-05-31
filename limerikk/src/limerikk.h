@@ -247,6 +247,10 @@ struct SearchStatistics {
     int nodes;
     int qnodes;
     int pv_nodes;
+
+    int rfps;
+    int nmps;
+
     float time;
     int sel_depth;
     float tt_hit_rate;
@@ -261,6 +265,8 @@ struct SearchMetrics {
     int node_count = 0;
     int qnode_count = 0;
     int pv_node_count = 0;
+    int rfp_count = 0;
+    int nmp_count = 0;
 
     int beta_cutoff_index_sum = 0;
     int beta_cutoff_count = 0;

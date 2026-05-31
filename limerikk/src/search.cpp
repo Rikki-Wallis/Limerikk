@@ -345,7 +345,7 @@ static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, 
     return best_score;
 }
 
-static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32_t alpha, int32_t beta, SearchEntry* ss, Move* best_move_out = nullptr) {
+static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32_t alpha, int32_t beta, SearchEntry* ss, Move* best_move_out = nullptr, bool allow_null_move = true) {
     int32_t alpha0 = alpha;
 
     int side = pos.to_move;
@@ -404,10 +404,30 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
     int rfp_margin = 150 * depth;
 
     if (can_rfp && pos.signed_eval() >= beta + rfp_margin) {
+        s.metrics->rfp_count++;
         return pos.signed_eval();
     }
 
 
+
+
+    // null move pruning
+
+    bool can_nmp = depth > 6 && !in_check && pos.non_pawn_material() > 0 && !pv_node && allow_null_move;
+
+    if (can_nmp) {
+        push_move(s, pos, NULL_MOVE, ss);
+
+        int r = 3 + depth / 6;
+        int32_t v = -search(pos, s, depth-r-1, ply+1, -beta, -(beta-1), ss+1, nullptr, false);
+
+        pop_move(pos, ss);
+
+        if (v >= beta) {
+            s.metrics->nmp_count++;
+            return v;
+        }
+    }
 
 
 
@@ -571,6 +591,10 @@ Move Position::best_move(SearchContext& s, int depth, bool enable_uci_info, int6
         stats->nodes = metrics.node_count;
         stats->qnodes = metrics.qnode_count;
         stats->pv_nodes = metrics.pv_node_count;
+
+        stats->nmps = metrics.nmp_count;
+        stats->rfps = metrics.rfp_count;
+
         stats->time = float(double(std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - start).count())/1000000.0);
         stats->mean_cutoff_index = float(metrics.beta_cutoff_index_sum)/float(metrics.beta_cutoff_count);
         stats->sel_depth = metrics.sel_depth;
