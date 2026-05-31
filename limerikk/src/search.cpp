@@ -43,13 +43,60 @@ TTEntry* SearchContext::tt_query(uint64_t hash) {
     return nullptr;
 }
 
-void SearchContext::tt_write(uint64_t hash, Move move) {
+void SearchContext::tt_write(uint64_t hash, Move move, int16_t score, int8_t depth, TTKind kind, int ply) {
     size_t index = hash & TT_MASK;
 
-    TTEntry& e = tt[index];
-    e.hash = hash;
-    e.move = move;
+    int16_t rel_score = score;
+
+    if (rel_score > MATE_SCORE - 1000) {
+        rel_score += ply;
+    }
+    else if (rel_score < -MATE_SCORE + 1000) {
+        rel_score -= ply;
+    }
+
+    TTEntry* e = &tt[index];
+
+    *e = {
+        .hash = hash,
+        .move = move,
+        .rel_score = rel_score,
+        .depth = depth,
+        .kind = kind
+    };
 }
+
+int16_t TTEntry::score(int ply) const {
+    if (rel_score > MATE_SCORE - 1000) {
+        return rel_score - int16_t(ply);
+    }
+    else if (rel_score < -MATE_SCORE + 1000) {
+        return rel_score + int16_t(ply);
+    }
+    else {
+        return rel_score;
+    }
+}
+
+bool TTEntry::cutoff(int d, int ply, int32_t alpha, int32_t beta) const {
+    if (d > depth) {
+        return false;
+    }
+
+    int16_t s = score(ply);
+
+    switch (kind) {
+        case TT_EXACT:
+            return true; 
+        case TT_LOWER:
+            return s >= beta;
+        case TT_UPPER:
+            return s <= alpha;
+    }
+
+    return false;
+}
+
 
 void HistoryTable::update(int side, int from, int to, int16_t bonus) {
     int16_t b = std::clamp(bonus, int16_t(-MAX_HISTORY), MAX_HISTORY);
@@ -179,6 +226,8 @@ static Move select_move(MoveList& moves, MoveScores& scores, int index) {
 }
 
 static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, int32_t beta, SearchEntry* ss) {
+    int32_t alpha0 = alpha;
+
     int side = pos.to_move;
 
     bool in_check = pos.is_checked[side];
@@ -203,8 +252,13 @@ static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, 
 
     {
         TTEntry* e = s.tt_query(pos.zobrist);
+
         if (e) {
             hash_move = e->move;
+
+            if (e->cutoff(0, ply, alpha, beta)) {
+                return e->score(ply);
+            }
         }
     }
 
@@ -270,7 +324,7 @@ static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, 
 
             pop_move(pos, ss);
 
-            s.tt_write(pos.zobrist, mv);
+            s.tt_write(pos.zobrist, mv, int16_t(best_score), 0, TT_LOWER, ply);
 
             return best_score;
         }
@@ -284,12 +338,14 @@ static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, 
         return -MATE_SCORE + ply;
     }
 
-    s.tt_write(pos.zobrist, best_move);
+    s.tt_write(pos.zobrist, best_move, int16_t(best_score), 0, best_score > alpha0 ? TT_EXACT : TT_UPPER, ply);
 
     return best_score;
 }
 
 static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32_t alpha, int32_t beta, SearchEntry* ss, Move* best_move_out = nullptr) {
+    int32_t alpha0 = alpha;
+
     int side = pos.to_move;
 
     s.metrics->sel_depth = std::max(s.metrics->sel_depth, ply);
@@ -321,6 +377,15 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
         TTEntry* e = s.tt_query(pos.zobrist);
         if (e) {
             hash_move = e->move;
+
+            if (e->cutoff(depth, ply, alpha, beta)) {
+                if (e->kind == TT_EXACT) {
+                    if (best_move_out) {
+                        *best_move_out = e->move;
+                    }
+                }
+                return e->score(ply);
+            }
         }
     }
 
@@ -383,7 +448,7 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
                 }
             }
 
-            s.tt_write(pos.zobrist, mv);
+            s.tt_write(pos.zobrist, mv, int16_t(best_score), int8_t(depth), TT_LOWER, ply);
 
             return best_score;
         }
@@ -402,7 +467,7 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
         }
     }
 
-    s.tt_write(pos.zobrist, best_move);
+    s.tt_write(pos.zobrist, best_move, int16_t(best_score), int8_t(depth), best_score > alpha0 ? TT_EXACT : TT_UPPER, ply);
 
     if (best_move_out) {
         *best_move_out = best_move;
