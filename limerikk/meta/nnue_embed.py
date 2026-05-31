@@ -21,18 +21,14 @@ def read_float_matrix(rows, cols):
 num_inputs = 2*6*64
 l1_output = 64
 l2_input = l1_output*2
-l3_input = 32
 
 # load the weights
 
 w0 = read_float_matrix(l1_output, num_inputs)
 b0 = read_floats(l1_output)
 
-w1 = read_float_matrix(l3_input, l2_input)
-b1 = read_floats(l3_input)
-
-w2 = read_float_matrix(1, l3_input);
-b2 = read_floats(1)
+w1 = read_float_matrix(1, l2_input)
+b1 = read_floats(1)
 
 def transpose(m):
     rows = len(m)
@@ -70,9 +66,6 @@ b0   = quantize_vector(b0, 64, 16)
 
 w1   = quantize_matrix(w1, 64, 8)
 b1   = quantize_vector(b1, 64*255, 32)
-
-w2   = quantize_matrix(w2, 64, 16)
-b2   = quantize_vector(b2, 64*255, 32)
 
 # write the header
 
@@ -118,5 +111,3 @@ write_matrix(w0_t, "w0", "int8_t")
 write_vector(b0,   "b0", "int16_t")
 write_matrix(w1,   "w1", "int8_t")
 write_vector(b1,   "b1", "int32_t")
-write_matrix(w2,   "w2", "int16_t")
-write_vector(b2,   "b2", "int32_t")
