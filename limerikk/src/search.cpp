@@ -442,8 +442,8 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
 
     int legal_move_index = 0;
 
-    for (int move_index = 0; move_index < moves.count; ++move_index) {
-        Move mv = select_move(moves, move_scores, move_index);
+    for (int plmi = 0; plmi < moves.count; ++plmi) {
+        Move mv = select_move(moves, move_scores, plmi);
 
         bool quiet = move_captured_piece(mv) == PIECE_NONE;
 
@@ -462,11 +462,11 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
 
         // calculate late move reduction
 
-        bool can_lmr = move_index > 3 && depth > 3 && !in_check && quiet;
+        bool can_lmr = legal_move_index > 3 && depth > 3 && !in_check && quiet;
         int lmr = 0;
 
         if (can_lmr) {
-            float frac = 0.5f + std::log(float(depth)) * std::log(float(move_index)) / 4.0f;
+            float frac = 0.5f + std::log(float(depth)) * std::log(float(legal_move_index)) / 4.0f;
             lmr = int(std::round(frac));
             lmr = std::max(lmr, 0);
         }
@@ -478,16 +478,16 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
 
         int32_t score = 0;
 
-        if (!pv_node || (move_index > 0)) {
+        if (!pv_node || (legal_move_index > 0)) {
             score = -search(pos, s, depth-1-lmr, ply+1, -(alpha+1), -alpha, ss+1);
 
-            if (score > alpha) {
+            if (lmr > 0 && score > alpha) {
                 score = -search(pos, s, depth-1, ply+1, -(alpha+1), -alpha, ss+1);
             }
         }
 
-        if (pv_node && (move_index == 0 || score > alpha)) {
-            score = -search(pos, s, depth-1-lmr, ply+1, -beta, -alpha, ss+1);
+        if (pv_node && (legal_move_index == 0 || score > alpha)) {
+            score = -search(pos, s, depth-1, ply+1, -beta, -alpha, ss+1);
         }
 
         if (s.exited) {
@@ -510,7 +510,7 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
         }
 
         if (alpha >= beta) {
-            s.metrics->beta_cutoff_index_sum += move_index;
+            s.metrics->beta_cutoff_index_sum += legal_move_index;
             s.metrics->beta_cutoff_count++;
 
             pop_move(pos, ss);
