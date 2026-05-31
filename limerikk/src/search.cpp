@@ -349,6 +349,7 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
     int32_t alpha0 = alpha;
 
     int side = pos.to_move;
+    bool in_check = pos.is_checked[side];
 
     s.metrics->sel_depth = std::max(s.metrics->sel_depth, ply);
 
@@ -393,6 +394,21 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
             }
         }
     }
+
+
+
+    // reverse futility pruning
+
+    bool can_rfp = !in_check && !pv_node;
+
+    int rfp_margin = 150 * depth;
+
+    if (can_rfp && pos.signed_eval() >= beta + rfp_margin) {
+        return pos.signed_eval();
+    }
+
+
+
 
 
     MoveList moves = pos.generate_moves();
