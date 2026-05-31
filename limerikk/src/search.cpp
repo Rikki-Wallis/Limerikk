@@ -258,7 +258,7 @@ static int32_t qsearch(Position& pos, SearchContext& s, int ply, int32_t alpha, 
         if (e) {
             hash_move = e->move;
 
-            if (e->cutoff(0, ply, alpha, beta)) {
+            if (!pv_node && e->cutoff(0, ply, alpha, beta)) {
                 return e->score(ply);
             }
         }
@@ -383,7 +383,7 @@ static int32_t search(Position& pos, SearchContext& s, int depth, int ply, int32
         if (e) {
             hash_move = e->move;
 
-            if (e->cutoff(depth, ply, alpha, beta)) {
+            if (!pv_node && e->cutoff(depth, ply, alpha, beta)) {
                 if (e->kind == TT_EXACT) {
                     if (best_move_out) {
                         *best_move_out = e->move;
