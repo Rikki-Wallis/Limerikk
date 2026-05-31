@@ -16,6 +16,7 @@ int main() {
         print("  time: {:.3f}ms\n", stats.time*1000.0f);
         print("  nodes: {}\n", stats.nodes);
         print("  qnodes: {} ({:.2f}%)\n", stats.qnodes, float(stats.qnodes)/float(stats.nodes)*100.0f);
+        print("  pv-nodes: {} ({:.2f}%)\n", stats.pv_nodes, float(stats.pv_nodes)/float(stats.nodes)*100.0f);
         print("  mean-cutoff: {:.2f}\n", stats.mean_cutoff_index);
         print("  nps: {:.2f}M\n", float(stats.nodes)/stats.time/1000000);
         print("  ebf: {:.2f}\n", std::exp(std::log(float(stats.nodes))/float(depth)));
