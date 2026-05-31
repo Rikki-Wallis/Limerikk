@@ -7,6 +7,7 @@
 #include <atomic>
 #include <vector>
 #include <fstream>
+#include <iostream>
 #include <cstdio>
 
 #include "common.h"
@@ -27,8 +28,10 @@ using TimePoint = std::chrono::time_point<Clock>;
 
 #define MAX_DEPTH 255
 
-constexpr int32_t INF_SCORE  = 400000000;
-constexpr int32_t MATE_SCORE = 32000; // just shy of int16 bounds
+constexpr int64_t INF        = 400000000;
+constexpr int64_t MATE_SCORE = 32000; // just shy of int16 bounds
+
+static constexpr size_t TRANSPOSITION_TABLE_SIZE = 1 << 16;
 
 static constexpr uint64_t RANK_1 = 0x00000000000000ff;
 static constexpr uint64_t RANK_2 = 0x000000000000ff00;
@@ -86,7 +89,7 @@ enum PositionFlags {
     POSITION_FLAG_BLACK_KCASTLE = (1 << 3),
 };
 
-inline constexpr const char* piece_alg_table[NUM_PIECE_TYPES] = {
+static const char* piece_alg_table[NUM_PIECE_TYPES] = {
     "uninitialized",
     "",
     "R",
@@ -126,10 +129,88 @@ struct Undo {
     uint32_t flags;
     Move move;
     int en_passant_sq;
-    int32_t incremental_eval;
+    int64_t incremental_eval;
     uint64_t zobrist;
     bool is_checked[2];
     int half_move_clock;
+};
+
+struct TTEntry {
+    uint32_t key32;
+    int16_t score;
+    uint8_t depth;
+    uint8_t flag;
+    Move best_move;
+    uint32_t padding;
+};
+
+struct TTCluster {
+    TTEntry entries[4];
+};
+
+#if defined(USE_NNUE) && true
+struct SearchParameters {
+    float lmr_rate_base = 0.0983966f;
+    float lmr_rate_divisor = 1.38455f;
+    float singular_margin_factor = 2.0308f;
+    int rfp_margin_factor = 136;
+    int rfp_improving_bonus = 47;
+    int fp_margin_factor = 989;
+    int lmr_history_bonus_threshold = 977;
+    float history_bonus_factor = 0.593523f;
+    float history_malus_factor = 0.622954f;
+    float cont_history_bonus_factor = 0.987245f;
+    float cont_history_malus_factor = 0.944155f;
+    int qsearch_big_delta = 1206;
+    int qsearch_delta_margin = 350;
+    int asp_initial_window_size = 13;
+    float asp_window_growth_factor = 6.16569f;
+    float nmp_r_base = 1.81043f;
+    float nmp_r_divisor = 6.86391f;
+    float lmp_index_base = 2.96918f;
+    float lmp_index_factor = 2.28471f;
+};
+#else
+struct SearchParameters {
+    float lmr_rate_base = 0.609352f;
+    float lmr_rate_divisor = 1.78544f;
+    float singular_margin_factor = 1.94709f;
+    int rfp_margin_factor = 132;
+    int rfp_improving_bonus = 28;
+    int fp_margin_factor = 828;
+    int lmr_history_bonus_threshold = 1594;
+    float history_bonus_factor = 1.02898f;
+    float history_malus_factor = 0.95008f;
+    float cont_history_bonus_factor = 0.46919f;
+    float cont_history_malus_factor = 0.48449f;
+    int qsearch_big_delta = 1223;
+    int qsearch_delta_margin = 70;
+    int asp_initial_window_size = 12;
+    float asp_window_growth_factor = 5.39f;
+    float nmp_r_base = 2.4091f;
+    float nmp_r_divisor = 7.25516f;
+    float lmp_index_base = 3.44978f;
+    float lmp_index_factor = 2.32816f;
+};
+#endif
+
+using KillerTable = std::array<std::array<Move, 2>, MAX_DEPTH>;
+using HistoryTable = std::array<std::array<int32_t, 64>, NUM_PIECE_TYPES>;
+using EvalHistory = std::array<int64_t, MAX_DEPTH>;
+
+using ContinuationTable = std::array<std::array<int32_t, 64>, NUM_PIECE_TYPES>;
+using ContinuationHistory = std::array<std::array<ContinuationTable, 64>, NUM_PIECE_TYPES>;
+
+class TranspositionTable {
+public:
+    std::vector<TTCluster> table;
+
+    TranspositionTable()
+        : table(TRANSPOSITION_TABLE_SIZE) {}
+
+    TTCluster& operator[](uint64_t index) {
+        return table[index];
+    }
 };
 
 struct ZobristTable {
@@ -171,6 +252,24 @@ struct EvalParameters {
     int doubled_pawn_penalty;
     int connected_pawn_bonus;
     int passed_pawn_bonus;
+};
+
+struct SearchContext {
+    TranspositionTable tt;
+    KillerTable killers;
+    HistoryTable history;
+    EvalHistory eval_history;
+    ContinuationHistory cont_history;
+
+    SearchParameters params;
+
+    std::atomic<bool>& should_stop;
+    class Budgeter* budgeter;
+
+    SearchContext(const SearchParameters& params, std::atomic<bool>& should_stop, class Budgeter* budgeter)
+        : tt({}), killers({}), history({}), eval_history({}), cont_history({}), params(params), should_stop(should_stop), budgeter(budgeter)
+    {
+    }
 };
 
 // Pack as exactly 16 bytes
@@ -224,14 +323,12 @@ class Budgeter {
 public:
     virtual ~Budgeter() = default;
     virtual void init() {}
-    virtual bool should_exit(int node_count) const = 0;
-    virtual bool should_start_next_iteration() const = 0;
+    virtual bool should_exit(struct Position& pos) const = 0;
 };
 
 class NullBudgeter : public Budgeter {
 public:
-    virtual bool should_exit(int node_count) const override;
-    virtual bool should_start_next_iteration() const override;
+    virtual bool should_exit(struct Position& pos) const override;
 };
 
 extern NullBudgeter null_budgeter;
@@ -242,81 +339,6 @@ struct Accumulator {
     int16_t* half(int persp) { return data[persp]; }
     int16_t* ptr() { return data[0]; }
 };
-
-struct SearchStatistics {
-    int nodes;
-    int qnodes;
-    float time;
-    int sel_depth;
-    float tt_hit_rate;
-    float mean_cutoff_index;
-};
-
-struct SearchEntry {
-    Move move;
-};
-
-struct SearchMetrics {
-    int node_count = 0;
-    int qnode_count = 0;
-
-    int beta_cutoff_index_sum = 0;
-    int beta_cutoff_count = 0;
-
-    int tt_queries = 0;
-    int tt_matches = 0;
-
-    int sel_depth = 0;
-};
-
-enum TTKind : uint8_t {
-    TT_EXACT,
-    TT_LOWER,
-    TT_UPPER
-};
-
-struct TTEntry {
-    uint64_t hash;
-    Move move;
-    int16_t rel_score;
-    int8_t depth;
-    TTKind kind;
-
-    int16_t score(int ply) const;
-
-    bool cutoff(int depth, int ply, int32_t alpha, int32_t beta) const;
-};
-
-constexpr size_t TT_SIZE = (1 << 20);
-constexpr size_t TT_MASK = TT_SIZE - 1;
-
-struct HistoryTable {
-    int16_t data[2][64][64];
-
-    void update(int side, int from, int to, int16_t bonus);
-};
-
-struct SearchContext {
-    SearchMetrics* metrics;
-    bool exited = false;
-
-    Budgeter* budgeter;
-    std::atomic<bool> should_stop = false;
-
-    TTEntry tt[TT_SIZE]{};
-    HistoryTable history{};
-
-    SearchContext(Budgeter* budgeter)
-        : budgeter(budgeter)
-    {
-    }
-
-    bool exit_on_node();
-
-    TTEntry* tt_query(uint64_t hash);
-    void tt_write(uint64_t hash, Move move, int16_t score, int8_t depth, TTKind kind, int ply);
-};
-
 
 struct Position {
     Side sides[2];
@@ -331,12 +353,24 @@ struct Position {
 
     uint64_t zobrist;
 
+    // benchmarking statistics
+    int max_ply;
+    int node_count;
+    int qnode_count;
+    int pv_node_count;
+    int beta_cutoffs;
+    int null_prunes; 
+    int cutoff_index_count;
+    int cutoff_index_sum;
+    int reduced_searches;
+    int reduced_fail_high;
+
     std::vector<Undo> undo_stack;
 
 #ifdef USE_NNUE
     std::vector<Accumulator> accumulator_stack;
 #endif
-    int32_t incr_eval;
+    int64_t incr_eval;
 
     Position()
         : to_move(WHITE), en_passant_sq(NULL_SQUARE), flags(0), half_move_clock(0)
@@ -344,6 +378,7 @@ struct Position {
         memset(sides, 0, sizeof(sides));
         memset(piece_at, 0, sizeof(piece_at));
         zobrist = compute_zobrist();
+        reset_benchmarking_statistics();
         #ifdef USE_NNUE
         accumulator_stack.push_back({});
         #endif
@@ -360,8 +395,6 @@ struct Position {
 
     std::unordered_map<std::string, Move> name_moves(std::span<Move> moves);
 
-    int32_t non_pawn_material() const;
-
     uint64_t all_pieces() const;
 
     void make_move(Move move);
@@ -377,31 +410,42 @@ struct Position {
 
     bool is_king_square_attacked(int side, int square) const;
 
-    int lowest_value_attacker(int sq, int side, uint64_t occupancy) const;
+    int lowest_value_defender(int defender_side, int sq, uint64_t occupancy) const;
+    int see(Move m) const;
 
     void filter_moves(MoveList& moves);
 
     void verify_integrity() const;
 
-    int32_t compute_eval() const;
-    int32_t nnue_eval() const;
+    int64_t compute_eval() const;
+    int64_t nnue_eval() const;
 
-    int32_t signed_eval();
+    int64_t signed_eval();
 
     // @note if no castle, make rook_from == rook_ro
     void update_eval(Piece captured_piece, int captured_pos, Piece moving_piece_start, Piece moving_piece_end, int move_from, int move_to, int rook_from, int rook_to, int side, int sign=1);
     void update_is_checked();
 
-    Move best_move(SearchContext& s, int depth, bool enable_uci_info=false, int64_t* score_out=nullptr, SearchStatistics* stats = nullptr);
+    int64_t negamax(SearchContext& s, int depth, int ply, bool allow_null, int64_t alpha, int64_t beta, Move excluded_move, int extensions_so_far, int root_depth, ContinuationTable* cont);
+    int64_t quiescence(SearchContext& s, int ply, int64_t alpha, int64_t beta);
+
+    int32_t mvv_lva_score(Move mv, int32_t offset) const;
+
+    std::pair<Move, int64_t> best_move_internal(SearchContext& s, MoveList& moves, int depth, Move last_best_move, int64_t alpha, int64_t beta);
+    Move best_move(int depth, std::atomic<bool>& should_stop, Budgeter* budgeter = &null_budgeter, const SearchParameters& params = {}, bool enable_uci_info=false, int64_t* score_out=nullptr);
     
     bool is_move_legal_slow(Move move);
 
     std::optional<GameResult> game_result();
-    Move think(SearchContext& s, int depth, bool enable_uci_info=false, int64_t* score_out=nullptr);
+    Move think(int depth, std::atomic<bool>& should_stop, Budgeter* budgeter = &null_budgeter, const SearchParameters& params = {}, bool enable_uci_info=false, int64_t* score_out=nullptr);
 
     uint64_t compute_zobrist() const;
 
     void update_en_passant_sq(int sq);
+
+    int64_t non_pawn_value(int side) const; // used for null move reduction heuristic
+
+    void reset_benchmarking_statistics();
 
     bool is_quiescent();
 
@@ -529,15 +573,11 @@ public:
         _start = Clock::now();
     }
 
-    virtual bool should_exit(int node_count) const override {
-        (void)node_count;
+    virtual bool should_exit(Position& pos) const override {
+        (void)pos;
         int64_t microseconds = std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - _start).count();
         double s = double(microseconds)/1000000.0;
         return s >= _limit;
-    }
-
-    virtual bool should_start_next_iteration() const override {
-        return true;
     }
 
 private:
@@ -551,12 +591,8 @@ public:
         : _limit(count)
     {}
 
-    virtual bool should_exit(int node_count) const override {
-        return node_count >= _limit;
-    }
-
-    virtual bool should_start_next_iteration() const override {
-        return true;
+    virtual bool should_exit(Position& pos) const override {
+        return pos.node_count >= _limit;
     }
 
 private:

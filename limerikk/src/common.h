@@ -13,16 +13,12 @@
 template<typename...Args>
 inline int print(const std::format_string<Args...>& fmt, Args&&... args) {
     std::string str = std::format(fmt, std::forward<Args>(args)...);
-    int x = printf("%s", str.c_str());
-    fflush(stdout);
-    return x;
+    return printf("%s", str.c_str());
 }
 
 inline int print(const std::format_string<>& fmt) {
     std::string str = std::format(fmt);
-    int x = printf("%s", str.c_str());
-    fflush(stdout);
-    return x;
+    return printf("%s", str.c_str());
 }
 
 struct set_bits {
