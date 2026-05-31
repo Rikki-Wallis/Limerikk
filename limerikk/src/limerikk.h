@@ -271,9 +271,22 @@ struct SearchMetrics {
     int sel_depth = 0;
 };
 
+enum TTKind : uint8_t {
+    TT_EXACT,
+    TT_LOWER,
+    TT_UPPER
+};
+
 struct TTEntry {
     uint64_t hash;
     Move move;
+    int16_t rel_score;
+    int8_t depth;
+    TTKind kind;
+
+    int16_t score(int ply) const;
+
+    bool cutoff(int depth, int ply, int32_t alpha, int32_t beta) const;
 };
 
 constexpr size_t TT_SIZE = (1 << 20);
@@ -303,7 +316,7 @@ struct SearchContext {
     bool exit_on_node();
 
     TTEntry* tt_query(uint64_t hash);
-    void tt_write(uint64_t hash, Move move);
+    void tt_write(uint64_t hash, Move move, int16_t score, int8_t depth, TTKind kind, int ply);
 };
 
 
