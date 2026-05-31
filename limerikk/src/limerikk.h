@@ -313,6 +313,7 @@ struct SearchContext {
 
     TTEntry tt[TT_SIZE]{};
     HistoryTable history{};
+    Move killers[MAX_DEPTH][2]{};
 
     SearchContext(Budgeter* budgeter)
         : budgeter(budgeter)
@@ -323,6 +324,8 @@ struct SearchContext {
 
     TTEntry* tt_query(uint64_t hash);
     void tt_write(uint64_t hash, Move move, int16_t score, int8_t depth, TTKind kind, int ply);
+
+    void add_killer(Move mv, int ply);
 };
 
 
